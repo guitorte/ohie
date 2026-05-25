@@ -22,28 +22,51 @@ CATEGORY = "Tarot de Marseille - Jean Dodal"
 USER_AGENT = "DodalTarotDownloader/1.0 (educational/research use)"
 
 TRUMP_NAMES = {
-    "Fool":    ("00", "The Fool - Le Mat"),
-    "I":       ("01", "The Magician - Le Bateleur"),
-    "II":      ("02", "The High Priestess - La Papesse"),
-    "III":     ("03", "The Empress - L'Impératrice"),
-    "IIII":    ("04", "The Emperor - L'Empereur"),
-    "V":       ("05", "The Pope - Le Pape"),
-    "VI":      ("06", "The Lovers - L'Amoureux"),
-    "VII":     ("07", "The Chariot - Le Chariot"),
-    "VIII":    ("08", "Justice - La Justice"),
-    "VIIII":   ("09", "The Hermit - L'Hermite"),
-    "X":       ("10", "Wheel of Fortune - La Roue de Fortune"),
-    "XI":      ("11", "Strength - La Force"),
-    "XII":     ("12", "The Hanged Man - Le Pendu"),
-    "XIII":    ("13", "Death - La Mort"),
-    "XIIII":   ("14", "Temperance - La Tempérance"),
-    "XV":      ("15", "The Devil - Le Diable"),
-    "XVI":     ("16", "The Tower - La Maison Dieu"),
-    "XVII":    ("17", "The Star - L'Étoile"),
-    "XVIII":   ("18", "The Moon - La Lune"),
-    "XVIIII":  ("19", "The Sun - Le Soleil"),
-    "XX":      ("20", "Judgement - Le Jugement"),
-    "XXI":     ("21", "The World - Le Monde"),
+    # Decimal keys — actual Wikimedia filenames use "trump 01", "trump 02", …
+    "Fool":  ("00", "The Fool - Le Mat"),
+    "01":    ("01", "The Magician - Le Bateleur"),
+    "02":    ("02", "The High Priestess - La Papesse"),
+    "03":    ("03", "The Empress - L'Impératrice"),
+    "04":    ("04", "The Emperor - L'Empereur"),
+    "05":    ("05", "The Pope - Le Pape"),
+    "06":    ("06", "The Lovers - L'Amoureux"),
+    "07":    ("07", "The Chariot - Le Chariot"),
+    "08":    ("08", "Justice - La Justice"),
+    "09":    ("09", "The Hermit - L'Hermite"),
+    "10":    ("10", "Wheel of Fortune - La Roue de Fortune"),
+    "11":    ("11", "Strength - La Force"),
+    "12":    ("12", "The Hanged Man - Le Pendu"),
+    "13":    ("13", "Death - La Mort"),
+    "14":    ("14", "Temperance - La Tempérance"),
+    "15":    ("15", "The Devil - Le Diable"),
+    "16":    ("16", "The Tower - La Maison Dieu"),
+    "17":    ("17", "The Star - L'Étoile"),
+    "18":    ("18", "The Moon - La Lune"),
+    "19":    ("19", "The Sun - Le Soleil"),
+    "20":    ("20", "Judgement - Le Jugement"),
+    "21":    ("21", "The World - Le Monde"),
+    # Roman-numeral keys — kept as fallback in case some files use them
+    "I":     ("01", "The Magician - Le Bateleur"),
+    "II":    ("02", "The High Priestess - La Papesse"),
+    "III":   ("03", "The Empress - L'Impératrice"),
+    "IIII":  ("04", "The Emperor - L'Empereur"),
+    "V":     ("05", "The Pope - Le Pape"),
+    "VI":    ("06", "The Lovers - L'Amoureux"),
+    "VII":   ("07", "The Chariot - Le Chariot"),
+    "VIII":  ("08", "Justice - La Justice"),
+    "VIIII": ("09", "The Hermit - L'Hermite"),
+    "X":     ("10", "Wheel of Fortune - La Roue de Fortune"),
+    "XI":    ("11", "Strength - La Force"),
+    "XII":   ("12", "The Hanged Man - Le Pendu"),
+    "XIII":  ("13", "Death - La Mort"),
+    "XIIII": ("14", "Temperance - La Tempérance"),
+    "XV":    ("15", "The Devil - Le Diable"),
+    "XVI":   ("16", "The Tower - La Maison Dieu"),
+    "XVII":  ("17", "The Star - L'Étoile"),
+    "XVIII": ("18", "The Moon - La Lune"),
+    "XVIIII":("19", "The Sun - Le Soleil"),
+    "XX":    ("20", "Judgement - Le Jugement"),
+    "XXI":   ("21", "The World - Le Monde"),
 }
 
 
@@ -114,7 +137,7 @@ def classify_card(title: str) -> tuple[str, str]:
     return "minor_arcana", clean
 
 
-def download_file(url: str, dest: Path, retries: int = 3) -> bool:
+def download_file(url: str, dest: Path, retries: int = 4) -> bool:
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         print(f"  [skip] {dest.name} already exists")
@@ -126,6 +149,15 @@ def download_file(url: str, dest: Path, retries: int = 3) -> bool:
                 dest.write_bytes(resp.read())
             print(f"  [ok]   {dest.name}")
             return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                wait = int(exc.headers.get("Retry-After", 60))
+                print(f"  [429]  {dest.name} — waiting {wait}s before retry {attempt}/{retries}")
+                time.sleep(wait)
+            else:
+                print(f"  [err]  {dest.name} attempt {attempt}: {exc}")
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
         except Exception as exc:
             print(f"  [err]  {dest.name} attempt {attempt}: {exc}")
             if attempt < retries:
@@ -178,7 +210,7 @@ def main():
         metadata.append(entry)
         if not success:
             failed.append(title)
-        time.sleep(0.3)  # be polite to the API
+        time.sleep(1.5)  # Wikimedia rate-limits aggressive downloaders
 
     meta_path = out / "metadata.json"
     with open(meta_path, "w", encoding="utf-8") as f:
