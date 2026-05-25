@@ -22,28 +22,28 @@ CATEGORY = "Tarot de Marseille - Jean Dodal"
 USER_AGENT = "DodalTarotDownloader/1.0 (educational/research use)"
 
 TRUMP_NAMES = {
-    "Fool":    ("0",    "The Fool / Le Mat"),
-    "I":       ("I",    "The Magician / Le Bateleur"),
-    "II":      ("II",   "The High Priestess / La Papesse"),
-    "III":     ("III",  "The Empress / L'Impératrice"),
-    "IIII":    ("IV",   "The Emperor / L'Empereur"),
-    "V":       ("V",    "The Pope / Le Pape"),
-    "VI":      ("VI",   "The Lovers / L'Amoureux"),
-    "VII":     ("VII",  "The Chariot / Le Chariot"),
-    "VIII":    ("VIII", "Justice / La Justice"),
-    "VIIII":   ("IX",   "The Hermit / L'Hermite"),
-    "X":       ("X",    "Wheel of Fortune / La Roue de Fortune"),
-    "XI":      ("XI",   "Strength / La Force"),
-    "XII":     ("XII",  "The Hanged Man / Le Pendu"),
-    "XIII":    ("XIII", "Death / La Mort"),
-    "XIIII":   ("XIV",  "Temperance / La Tempérance"),
-    "XV":      ("XV",   "The Devil / Le Diable"),
-    "XVI":     ("XVI",  "The Tower / La Maison Dieu"),
-    "XVII":    ("XVII", "The Star / L'Étoile"),
-    "XVIII":   ("XVIII","The Moon / La Lune"),
-    "XVIIII":  ("XIX",  "The Sun / Le Soleil"),
-    "XX":      ("XX",   "Judgement / Le Jugement"),
-    "XXI":     ("XXI",  "The World / Le Monde"),
+    "Fool":    ("00", "The Fool - Le Mat"),
+    "I":       ("01", "The Magician - Le Bateleur"),
+    "II":      ("02", "The High Priestess - La Papesse"),
+    "III":     ("03", "The Empress - L'Impératrice"),
+    "IIII":    ("04", "The Emperor - L'Empereur"),
+    "V":       ("05", "The Pope - Le Pape"),
+    "VI":      ("06", "The Lovers - L'Amoureux"),
+    "VII":     ("07", "The Chariot - Le Chariot"),
+    "VIII":    ("08", "Justice - La Justice"),
+    "VIIII":   ("09", "The Hermit - L'Hermite"),
+    "X":       ("10", "Wheel of Fortune - La Roue de Fortune"),
+    "XI":      ("11", "Strength - La Force"),
+    "XII":     ("12", "The Hanged Man - Le Pendu"),
+    "XIII":    ("13", "Death - La Mort"),
+    "XIIII":   ("14", "Temperance - La Tempérance"),
+    "XV":      ("15", "The Devil - Le Diable"),
+    "XVI":     ("16", "The Tower - La Maison Dieu"),
+    "XVII":    ("17", "The Star - L'Étoile"),
+    "XVIII":   ("18", "The Moon - La Lune"),
+    "XVIIII":  ("19", "The Sun - Le Soleil"),
+    "XX":      ("20", "Judgement - Le Jugement"),
+    "XXI":     ("21", "The World - Le Monde"),
 }
 
 
@@ -98,17 +98,20 @@ def get_image_urls(titles: list[str]) -> dict[str, str]:
     return urls
 
 
-def classify_card(filename: str) -> tuple[str, str]:
-    """Return (subfolder, clean_name) for a given filename."""
-    name = Path(filename).stem  # e.g. "Jean Dodal Tarot trump XIV"
+def classify_card(title: str) -> tuple[str, str]:
+    """Return (subfolder, clean_name) for a given Wikimedia file title."""
+    # Strip the "File:" namespace prefix, then drop the extension
+    bare = title.removeprefix("File:")
+    name = Path(bare).stem  # e.g. "Jean Dodal Tarot trump XIV"
     if "trump" in name.lower():
-        # Extract the key after "trump "
         key = name.split("trump ")[-1].strip()
         if key in TRUMP_NAMES:
             number, label = TRUMP_NAMES[key]
-            return "major_arcana", f"{number:>4} - {label}"
+            return "major_arcana", f"{number} - {label}"
         return "major_arcana", name
-    return "minor_arcana", name
+    # Minor arcana: strip the redundant "Jean Dodal Tarot " prefix for brevity
+    clean = name.removeprefix("Jean Dodal Tarot ").strip()
+    return "minor_arcana", clean
 
 
 def download_file(url: str, dest: Path, retries: int = 3) -> bool:
