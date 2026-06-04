@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flávio na Casa Branca - A Aventura</title>
+<style>
+  html,body{
+    margin:0;padding:0;background:#000;height:100%;
+    overflow:hidden;
+    font-family:"Courier New",monospace;
+    color:#aaa;
+    -webkit-user-select:none;user-select:none;
+    touch-action:none;
+  }
+  #wrap{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(#1a1a1a,#000);
+  }
+  canvas{
+    image-rendering:pixelated;
+    image-rendering:crisp-edges;
+    image-rendering:-moz-crisp-edges;
+    cursor:crosshair;
+    box-shadow:0 0 0 2px #222, 0 0 40px #000 inset;
+    background:#000;
+  }
+  #hint{
+    position:absolute;bottom:4px;left:0;right:0;text-align:center;
+    font-size:11px;color:#444;pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="320" height="200"></canvas></div>
+<div id="hint">Clique para jogar &middot; SOM: clique na tela uma vez para ligar o "PC Speaker"</div>
+<script>
+"use strict";
+/* =========================================================================
+   FLÁVIO NA CASA BRANCA — A AVENTURA  (c) 1994 TorteSoft (não)
+   Um autêntico point-and-click ruim de propósito.
+   Tudo desenhado à mão em 320x200. Sem assets externos. Sem vergonha.
+   ========================================================================= */
+
+const SCREEN_W = 320, SCREEN_H = 200;
+const view = document.getElementById('c');
+const vctx = view.getContext('2d');
+vctx.imageSmoothingEnabled = false;
+
+// Offscreen 320x200 buffer — desenhamos aqui e escalamos com nearest-neighbor.
+const buf = document.createElement('canvas');
+buf.width = SCREEN_W; buf.height = SCREEN_H;
+const ctx = buf.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+ctx.textBaseline = 'top';
+
+/* ---- Paleta tipo VGA cafona ---- */
+const P = {
+  sky1:'#5878c8', sky2:'#88a8e8',
+  grass:'#2c7a2c', grassDk:'#1f5a1f',
+  path:'#b8a070', pathDk:'#988050',
+  white:'#f8f8f8', wwhite:'#e8e8d8', shadow:'#9090a0',
+  red:'#c83030', blue:'#3048a8', gold:'#d8b020',
+  skin:'#e0a878', skinDk:'#b07848', hair:'#503018',
+  black:'#101018', dkgray:'#303040', gray:'#707080', ltgray:'#b0b0b8',
+  uiBg:'#28283c', uiLine:'#5858a0',
+  green2:'#40c040', brown:'#7a5020', brownDk:'#503010',
+  metal:'#888898', metalDk:'#585868',
+};
+
+/* ---- "PC Speaker" beeps via WebAudio ---- */
+let audioCtx = null, soundOn = false;
+function initAudio(){
+  if(audioCtx) return;
+  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); soundOn = true; }
+  catch(e){ soundOn = false; }
+}
+function beep(freq, dur, type, vol){
+  if(!soundOn||!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type||'square'; o.frequency.value = freq;
+  g.gain.value = vol||0.05;
+  o.connect(g); g.connect(audioCtx.destination);
+  const t = audioCtx.currentTime;
+  o.start(t); o.stop(t + (dur||0.05));
+  g.gain.setValueAtTime(g.gain.value, t);
+  g.gain.linearRampToValueAtTime(0.0001, t + (dur||0.05));
+}
+function blip(){ beep(660,0.03,'square',0.04); }
+function clickSnd(){ beep(220,0.04,'square',0.05); }
+function sadTrombone(){
+  if(!soundOn) return;
+  const ns=[233,220,196,165];
+  ns.forEach((f,i)=>setTimeout(()=>beep(f,0.28,'sawtooth',0.06),i*230));
+}
+function triumph(){
+  if(!soundOn) return;
+  const ns=[523,659,784,1046];
+  ns.forEach((f,i)=>setTimeout(()=>beep(f,0.18,'square',0.06),i*150));
+}
+function camera(){ beep(1500,0.02,'square',0.07); setTimeout(()=>beep(120,0.12,'sawtooth',0.05),40); }
+
+/* =========================================================================
+   FONTE: usamos a fonte do canvas em tamanho pequeno; ao escalar 3x com
+   nearest-neighbor ela fica bem chunky e oitentista/noventista.
+   ========================================================================= */
+function txt(s, x, y, color, scale){
+  scale = scale||1;
+  ctx.fillStyle = color || P.white;
+  ctx.font = (6*scale)+'px "Courier New",monospace';
+  ctx.fillText(s, Math.round(x), Math.round(y));
+}
+function txtW(s, scale){
+  scale = scale||1;
+  ctx.font = (6*scale)+'px "Courier New",monospace';
+  return ctx.measureText(s).width;
+}
+function txtCenter(s, y, color, scale){
+  txt(s, (SCREEN_W - txtW(s,scale))/2, y, color, scale);
+}
+function wrap(s, maxW, scale){
+  scale=scale||1;
+  const words = s.split(' ');
+  const lines=[]; let cur='';
+  for(const w of words){
+    const t = cur ? cur+' '+w : w;
+    if(txtW(t,scale) > maxW && cur){ lines.push(cur); cur=w; }
+    else cur=t;
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+
+/* =========================================================================
+   ESTADO DO JOGO
+   ========================================================================= */
+const STATE = { BOOT:0, TITLE:1, COPYPROT:2, INTRO:3, GAME:4, WIN:5 };
+let state = STATE.BOOT;
+let bootTimer = 0;
+
+const game = {
+  inv: ['celular'],            // Flávio já chega com o celular (claro)
+  flags: {
+    talkedGuard:false, gotBadge:false, gaveBadge:false, gotDog:false,
+    squirrel:false, guardDistracted:false, won:false,
+  },
+  flavioX: 60, flavioTargetX: 60, walking:false, facing:1, bob:0,
+};
+
+// Itens: ícone desenhado + nome
+const ITEMS = {
+  celular:  { name:'Celular',          desc:'Meu celular. Tela rachada, mas a câmera funciona. É o que importa pra selfie histórica.' },
+  cracha:   { name:'Crachá Vencido',   desc:'Um crachá plastificado que achei no lixo. Diz "VISITOR - STENOGRAPHER" e venceu em 1998. Serve.' },
+  cachorro: { name:'Cachorro-Quente',  desc:'Cachorro-quente que o vendedor me deu de pena. Tem pouco molho. A vida é assim.' },
+};
+
+/* ---- Verbos estilo SCUMM ---- */
+const VERBS = [
+  {id:'olhar', label:'Olhar'},
+  {id:'pegar', label:'Pegar'},
+  {id:'usar',  label:'Usar'},
+  {id:'falar', label:'Falar com'},
+  {id:'dar',   label:'Dar'},
+  {id:'andar', label:'Ir para'},
+];
+let curVerb = 'olhar';
+let usingItem = null;     // item selecionado para "Usar X com Y" / "Dar X para Y"
+
+/* ---- Hotspots da cena (coordenadas no mundo 320x150) ---- */
+const HOTSPOTS = [
+  {id:'guarda',  name:'Segurança Brad', x:158, y:60,  w:34, h:80, walkX:140},
+  {id:'portao',  name:'Portão da Casa Branca', x:196, y:40, w:60, h:100, walkX:182},
+  {id:'cart',    name:'Carrinho de Cachorro-Quente', x:10, y:78, w:46, h:46, walkX:62},
+  {id:'turista', name:'Turista', x:100, y:74, w:20, h:62, walkX:92},
+  {id:'lixo',    name:'Lata de Lixo', x:64, y:96, w:18, h:28, walkX:80},
+  {id:'arbusto', name:'Arbusto', x:262, y:104, w:42, h:30, walkX:250},
+  {id:'casa',    name:'Casa Branca', x:120, y:8,  w:170, h:36, walkX:140},
+];
+
+/* ---- Falas (subtítulo no topo) ---- */
+let speech = null;        // {lines:[], color, who, timer}
+function say(s, color, who){
+  speech = { lines: wrap(s, 290, 1), color: color||P.white, who: who||'', t: 0 };
+  blip();
+}
+function clearSpeech(){ speech = null; }
+
+/* =========================================================================
+   LÓGICA DAS INTERAÇÕES  — o coração do humor constrangedor
+   ========================================================================= */
+function findItem(id){ return game.inv.indexOf(id) >= 0; }
+function addItem(id){ if(!findItem(id)){ game.inv.push(id); blip(); } }
+function removeItem(id){ const i=game.inv.indexOf(id); if(i>=0) game.inv.splice(i,1); }
+
+function interact(hotId){
+  const hs = HOTSPOTS.find(h=>h.id===hotId);
+  const f = game.flags;
+
+  // ---- USAR / DAR um item do inventário em um hotspot ----
+  if(usingItem){
+    const it = usingItem;
+    const action = curVerb; // 'usar' ou 'dar'
+    usingItem = null; curVerb = 'olhar';
+
+    // DAR crachá / cachorro pro guarda
+    if((it==='cracha') && hotId==='guarda'){
+      if(!f.gotDog && !f.squirrel){
+        f.gaveBadge = true;
+        say('Brad pega o crachá, lê devagar e devolve: "Senhor, isso é um crachá de ESTENÓGRAFA, venceu em 1998, e tá escrito FLÁVIA. ...O senhor é a Flávia?" Eu: "Sou primo dela." Ele só me encara.', P.white);
+        sadTrombone();
+        return;
+      }
+    }
+    if(it==='cachorro' && hotId==='guarda'){
+      say('Eu ofereço o cachorro-quente pro Brad. "Comi às 6h, senhor. E sou vegano." Ele olha pro salsicha encharcada de molho na minha mão. Eu continuo segurando. Ninguém fala nada por uns 8 segundos.', P.white);
+      sadTrombone();
+      return;
+    }
+    if(it==='cachorro' && hotId==='turista'){
+      say('A turista recusa: "No, thank you." Eu insisto em inglês: "Is free, is free, very gostoso." Ela atravessa a rua.', P.white);
+      sadTrombone();
+      return;
+    }
+
+    // PUZZLE: usar cachorro-quente no arbusto -> atrai esquilo
+    if(it==='cachorro' && hotId==='arbusto'){
+      if(!f.squirrel){
+        removeItem('cachorro');
+        f.squirrel = true;
+        say('Coloco o cachorro-quente no arbusto feito isca. Um esquilo gordo da Casa Branca aparece na hora e começa a roer. Ele me olha. Eu olho pra ele. Temos um plano agora. (Eu tenho um plano.)', P.green2);
+        beep(880,0.05,'square',0.05);
+        return;
+      } else {
+        say('O esquilo já tá lá detonando o lanche. Não vou atrapalhar o artista.', P.white);
+        return;
+      }
+    }
+
+    // PUZZLE: usar crachá no esquilo (prende no esquilo -> "intruso identificado")
+    if(it==='cracha' && hotId==='arbusto'){
+      if(f.squirrel && !f.guardDistracted){
+        removeItem('cracha');
+        f.guardDistracted = true;
+        say('Prendo o crachá "VISITOR" no esquilo com a presilha. Agora ele é um visitante CREDENCIADO. O esquilo dispara em direção ao portão. Brad grita "INTRUDER WITH BADGE!" e sai correndo atrás dele. O posto ficou VAZIO.', P.gold);
+        triumph();
+        return;
+      } else if(!f.squirrel){
+        say('Não tem esquilo nenhum aqui. Eu ia prender o crachá em quê? No arbusto? Que vergonha pensar nisso.', P.white);
+        return;
+      }
+    }
+
+    // Usar celular no portão / na casa quando o guarda saiu = VITÓRIA
+    if(it==='celular' && (hotId==='portao'||hotId==='casa'||hotId==='guarda')){
+      if(f.guardDistracted){ winSequence(); return; }
+      say('Levanto o celular pra tirar a selfie, mas o Brad ainda tá aqui plantado feito poste. Ele tampa a câmera com a mão. "No photos, sir." Preciso tirar ele daqui.', P.white);
+      return;
+    }
+
+    // fallback genérico
+    const itName = ITEMS[it].name;
+    say('Tento usar '+itName.toLowerCase()+' com '+(hs?hs.name.toLowerCase():'isso')+'. Não acontece nada. Algumas pessoas filmam com o celular. Pra postar.', P.white);
+    return;
+  }
+
+  // ---- Verbos simples sobre hotspots ----
+  switch(hotId){
+    case 'casa':
+      if(curVerb==='olhar') say('A Casa Branca. Branca, grande, cheia de colunas. Eu deveria estar LÁ DENTRO, sentado do lado do presidente, comendo uns salgadinhos importados. Em vez disso tô aqui na calçada suando na gravata do meu pai.', P.white);
+      else if(curVerb==='andar') say('Tem um portão, um guarda de 1,90m e o bom senso entre mim e a Casa Branca. Detalhes.', P.white);
+      else say('Não dá pra fazer isso com um prédio histórico, Flávio. Controle-se.', P.white);
+      break;
+
+    case 'portao':
+      if(curVerb==='olhar') say('Portão de ferro preto com águia dourada. Trancado. Atrás dele, o gramado mais bem cuidado do hemisfério norte.', P.white);
+      else if(curVerb==='pegar') say('Eu sacudo o portão. Faz barulho. O guarda tosse. Eu paro. Disfarço assobiando o hino do Brasil errado.', P.white);
+      else if(curVerb==='usar'){
+        if(game.flags.guardDistracted){ say('Com o Brad longe, eu poderia tentar a selfie agora. (Dica: USE o CELULAR no portão.)', P.gold); }
+        else say('O portão não abre. E o Brad não tira o olho de mim. Tenho que dar um jeito nesse guarda primeiro.', P.white);
+      }
+      else if(curVerb==='andar'){ walkTo(182); say('Chego perto do portão. O cheiro de poder e grama recém-cortada.', P.white); }
+      else say('O portão não tá interessado em conversa, Flávio.', P.white);
+      break;
+
+    case 'guarda':
+      if(curVerb==='olhar') say('Brad. Segurança. Óculos escuros mesmo nublado. Tem um fone na orelha e zero dúvidas sobre quem eu NÃO sou.', P.white);
+      else if(curVerb==='falar'){
+        game.flags.talkedGuard = true;
+        if(game.flags.guardDistracted){
+          say('O Brad sumiu atrás de um esquilo credenciado. Não tem com quem falar. APROVEITA.', P.gold);
+        } else {
+          say('Eu: "Bom dia! Flávio, sou convidado da reunião presidencial." Brad confere a prancheta. "...Não tem nenhum Flávio aqui." Eu: "Procura por Flávio com PH." Ele: "...Não." Eu: "Tenta de novo, com carinho." Uns turistas pararam pra assistir.', P.white);
+        }
+      }
+      else if(curVerb==='dar'){ say('Pra dar algo pro Brad eu preciso escolher o item no inventário primeiro. (Clique no item, depois nele.)', P.ltgray); }
+      else if(curVerb==='pegar') say('Eu não vou PEGAR no segurança da Casa Branca. Já tô numa situação delicada o suficiente.', P.white);
+      else if(curVerb==='andar'){ walkTo(140); }
+      else say('O Brad não reage. Profissional.', P.white);
+      break;
+
+    case 'cart':
+      if(curVerb==='olhar') say('Carrinho de cachorro-quente. O vendedor, Sérgio (crachá: "SERGIO"), brasileiro também, me reconheceu pela cara de perdido.', P.white);
+      else if(curVerb==='falar'||curVerb==='pegar'){
+        if(!game.flags.gotDog){
+          game.flags.gotDog = true;
+          addItem('cachorro');
+          say('Sérgio: "Conterrâneo, qual foi?" Eu conto tudo. Ele faz que sim com pena, me dá um cachorro-quente DE GRAÇA e diz: "Vai por mim, volta pro hotel." Eu pego o lanche. (Pego a dignidade não.)', P.green2);
+        } else {
+          say('Sérgio: "Já te dei um, parceiro. Agora é por minha conta NÃO te dar mais." Ele tem razão.', P.white);
+        }
+      }
+      else if(curVerb==='usar') say('Mexer no carrinho dele sem permissão? Não. Já tô representando mal o Brasil o bastante hoje.', P.white);
+      else if(curVerb==='andar'){ walkTo(62); }
+      else say('...', P.white);
+      break;
+
+    case 'turista':
+      if(curVerb==='olhar') say('Uma turista com boné "I ♥ DC" e uma câmera caríssima pendurada. Ela me filma achando que sou alguma "local attraction".', P.white);
+      else if(curVerb==='falar') say('Eu: "Você quer foto comigo? Sou quase convidado oficial." Ela sorri educada e tira foto do prédio ATRÁS de mim. Eu saio na foto sem querer, de costas.', P.white);
+      else if(curVerb==='pegar') say('Roubar a câmera dela? Eu vim tirar UMA selfie, não pegar 15 anos de prisão federal.', P.white);
+      else if(curVerb==='andar'){ walkTo(92); }
+      else say('Ela finge que não entende português. Justo.', P.white);
+      break;
+
+    case 'lixo':
+      if(curVerb==='olhar') say('Uma lata de lixo oficial. Brilhando algo plastificado lá dentro. Pode ser útil. Pode ser nojento. Geralmente é os dois.', P.white);
+      else if(curVerb==='pegar'){
+        if(!game.flags.gotBadge){
+          game.flags.gotBadge = true;
+          addItem('cracha');
+          say('Enfio a mão na lata (a turista filma tudo) e puxo um CRACHÁ "VISITOR" plastificado. Tá meio grudento. Diz "STENOGRAPHER - FLAVIA". Praticamente meu. Guardo no bolso da gravata.', P.green2);
+        } else {
+          say('Já peguei o crachá. Não vou catar mais coisa no lixo na frente de turista. Tem limite. (Pouco, mas tem.)', P.white);
+        }
+      }
+      else if(curVerb==='usar') say('Eu fico encarando a lata de lixo. A lata de lixo me encara de volta. Empate.', P.white);
+      else if(curVerb==='andar'){ walkTo(80); }
+      else say('É uma lata de lixo, Flávio.', P.white);
+      break;
+
+    case 'arbusto':
+      if(curVerb==='olhar'){
+        if(game.flags.squirrel) say('Um esquilo gordo destruindo meu cachorro-quente dentro do arbusto. Ele tem mais credencial pra entrar ali do que eu.', P.white);
+        else say('Um arbusto ornamental impecável. Farfalha. Deve ter bicho. Tudo aqui tem mais propósito do que eu neste momento.', P.white);
+      }
+      else if(curVerb==='pegar') say('Eu cutuco o arbusto. Algo cutuca de volta. Eu recuo. Mantenho a dignidade recuando devagar.', P.white);
+      else if(curVerb==='usar') say('Pra usar algo no arbusto eu preciso escolher um item primeiro. (Clica no item, depois no arbusto.)', P.ltgray);
+      else if(curVerb==='andar'){ walkTo(250); }
+      else say('O arbusto não responde. Como todo mundo aqui.', P.white);
+      break;
+  }
+}
+
+// Clicou num item do inventário
+function clickInvItem(id){
+  if(curVerb==='usar' || curVerb==='dar'){
+    usingItem = id;
+    say((curVerb==='dar'?'Dar ':'Usar ')+ITEMS[id].name+' com... (clique no alvo)', P.gold);
+    clickSnd();
+  } else {
+    // qualquer outro verbo no item = olhar
+    say(ITEMS[id].desc, P.ltgray);
+    blip();
+  }
+}
+
+// Andar do Flávio
+function walkTo(x){
+  game.flavioTargetX = Math.max(20, Math.min(260, x));
+  game.facing = game.flavioTargetX < game.flavioX ? -1 : 1;
+  game.walking = true;
+}
+
+/* =========================================================================
+   SEQUÊNCIA DE VITÓRIA
+   ========================================================================= */
+let winStep = 0, winTimer = 0;
+function winSequence(){
+  state = STATE.WIN; winStep = 0; winTimer = 0; game.flags.won = true;
+}
+
+/* =========================================================================
+   DESENHO DAS CENAS
+   ========================================================================= */
+function ditherSky(){
+  // céu com dithering grosseiro tipo EGA (estático pra não tremer)
+  ctx.fillStyle=P.sky1; ctx.fillRect(0,0,SCREEN_W,70);
+  for(let y=0;y<70;y+=2){
+    ctx.fillStyle=P.sky2;
+    const dens = Math.floor((y/70)*4); // mais claro embaixo
+    for(let x=((y/2)%2)*2; x<SCREEN_W; x+=4){
+      if(((x+y)>>1)%(5-dens) ===0) ctx.fillRect(x,y,2,1);
+    }
+  }
+}
+
+function drawWhiteHouse(){
+  // Gramado
+  ctx.fillStyle = P.grass; ctx.fillRect(0,70,SCREEN_W,80);
+  ctx.fillStyle = P.grassDk;
+  for(let y=74;y<116;y+=6) for(let x=(y%12);x<SCREEN_W;x+=12) ctx.fillRect(x,y,3,1); // textura sutil
+  // calçada
+  ctx.fillStyle = P.path; ctx.fillRect(0,120,SCREEN_W,30);
+  ctx.fillStyle = P.pathDk;
+  for(let x=0;x<SCREEN_W;x+=20) ctx.fillRect(x,120,1,30);
+  ctx.fillRect(0,120,SCREEN_W,1);
+
+  // Casa Branca ao fundo
+  ctx.fillStyle = P.wwhite; ctx.fillRect(120,18,170,30);
+  ctx.fillStyle = P.white;  ctx.fillRect(120,18,170,4);
+  // colunas
+  ctx.fillStyle = P.shadow;
+  for(let i=0;i<8;i++) ctx.fillRect(150+i*15, 24, 4, 22);
+  ctx.fillStyle=P.white;
+  for(let i=0;i<8;i++) ctx.fillRect(150+i*15, 24, 2, 22);
+  // frontão/telhado
+  ctx.fillStyle=P.shadow; ctx.fillRect(140,14,130,4);
+  ctx.fillStyle=P.wwhite; ctx.beginPath();
+  ctx.moveTo(165,14); ctx.lineTo(245,14); ctx.lineTo(205,4); ctx.closePath(); ctx.fill();
+  // bandeira
+  ctx.fillStyle=P.gray; ctx.fillRect(204,0,1,6);
+  ctx.fillStyle=P.red; ctx.fillRect(205,0,8,4);
+  ctx.fillStyle=P.blue; ctx.fillRect(205,0,3,2);
+  // janelas
+  ctx.fillStyle=P.blue;
+  for(let i=0;i<6;i++) ctx.fillRect(128+i*26,30,8,10);
+
+  // cerca preta
+  ctx.fillStyle=P.black; ctx.fillRect(0,116,SCREEN_W,4);
+  for(let x=4;x<SCREEN_W;x+=10){ ctx.fillRect(x,96,2,24); }
+  // ponta dourada das grades
+  ctx.fillStyle=P.gold;
+  for(let x=4;x<SCREEN_W;x+=10){ ctx.fillRect(x,94,2,2); }
+
+  // PORTÃO (na cerca)
+  drawGate(196,90);
+}
+
+function drawGate(x,y){
+  ctx.fillStyle=P.black;
+  ctx.fillRect(x,y,4,40); ctx.fillRect(x+56,y,4,40);
+  ctx.fillRect(x,y,60,4);
+  for(let i=1;i<6;i++) ctx.fillRect(x+i*9,y,2,40);
+  // águia dourada
+  ctx.fillStyle=P.gold;
+  ctx.fillRect(x+26,y+14,8,3);
+  ctx.fillRect(x+28,y+11,4,3);
+  ctx.fillRect(x+24,y+15,2,2); ctx.fillRect(x+34,y+15,2,2);
+}
+
+function drawTrash(x,y){
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,14,22);
+  ctx.fillStyle=P.metal;   ctx.fillRect(x+2,y+2,10,18);
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y-2,14,3);
+  ctx.fillStyle=P.dkgray;  ctx.fillRect(x+3,y+1,8,2);
+  if(!game.flags.gotBadge){ ctx.fillStyle=P.gold; ctx.fillRect(x+5,y,3,3); } // crachá brilhando
+}
+
+function drawCart(x,y){
+  // guarda-sol
+  ctx.fillStyle=P.red; ctx.fillRect(x-2,y-18,44,3);
+  ctx.fillStyle=P.white; ctx.fillRect(x+8,y-18,8,3); ctx.fillRect(x+28,y-18,8,3);
+  ctx.fillStyle=P.gray; ctx.fillRect(x+19,y-15,2,15);
+  // corpo do carrinho
+  ctx.fillStyle=P.metal; ctx.fillRect(x,y,40,22);
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,40,3);
+  ctx.fillStyle=P.red; ctx.fillRect(x+2,y+6,36,3);
+  ctx.fillStyle=P.gold; ctx.font='5px monospace';
+  // roda
+  ctx.fillStyle=P.black; ctx.beginPath(); ctx.arc(x+8,y+24,4,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+32,y+24,4,0,7); ctx.fill();
+  // letreiro
+  txt('HOT DOG', x+4, y+12, P.red, 1);
+  // Sérgio o vendedor (cabeça atrás)
+  ctx.fillStyle=P.skin; ctx.fillRect(x+16,y-10,8,8);
+  ctx.fillStyle=P.white; ctx.fillRect(x+15,y-13,10,4); // toca de cozinheiro
+  ctx.fillStyle=P.black; ctx.fillRect(x+18,y-7,1,1); ctx.fillRect(x+21,y-7,1,1);
+}
+
+function drawTourist(x,y){
+  // boné
+  ctx.fillStyle=P.red; ctx.fillRect(x,y,12,4); ctx.fillRect(x+10,y+2,5,2);
+  // cabeça
+  ctx.fillStyle=P.skin; ctx.fillRect(x+1,y+4,10,8);
+  ctx.fillStyle=P.black; ctx.fillRect(x+3,y+7,2,2); ctx.fillRect(x+7,y+7,2,2);
+  // corpo (camiseta turística)
+  ctx.fillStyle=P.sky2; ctx.fillRect(x-1,y+12,14,18);
+  ctx.fillStyle=P.white; ctx.fillRect(x+5,y+15,2,2);
+  // câmera no peito
+  ctx.fillStyle=P.black; ctx.fillRect(x+3,y+18,7,5);
+  ctx.fillStyle=P.metal; ctx.fillRect(x+5,y+19,3,3);
+  // pernas
+  ctx.fillStyle=P.brown; ctx.fillRect(x+1,y+30,4,14); ctx.fillRect(x+7,y+30,4,14);
+}
+
+function drawGuard(x,y){
+  const f = game.flags;
+  if(f.guardDistracted){
+    // guarda correndo pro lado, longe, pequeno, atrás do esquilo
+    drawTinyGuardRunning(245,108);
+    return;
+  }
+  // chapéu / cabeça
+  ctx.fillStyle=P.dkgray; ctx.fillRect(x+4,y,18,4);     // aba do chapéu
+  ctx.fillStyle=P.black;  ctx.fillRect(x+6,y-5,14,6);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+7,y+4,12,8);   // rosto
+  ctx.fillStyle=P.black;  ctx.fillRect(x+8,y+6,10,3);   // óculos escuros
+  ctx.fillStyle=P.metal;  ctx.fillRect(x+9,y+7,1,1);    // brilho óculos
+  // terno preto
+  ctx.fillStyle=P.black;  ctx.fillRect(x+2,y+12,22,34);
+  ctx.fillStyle=P.dkgray; ctx.fillRect(x+11,y+12,4,34); // camisa/gravata
+  ctx.fillStyle=P.red;    ctx.fillRect(x+12,y+13,2,10);
+  // braços cruzados
+  ctx.fillStyle=P.black;  ctx.fillRect(x,y+20,26,8);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+9,y+21,8,5);
+  // pernas
+  ctx.fillStyle=P.black;  ctx.fillRect(x+4,y+46,7,20); ctx.fillRect(x+15,y+46,7,20);
+  ctx.fillStyle=P.dkgray; ctx.fillRect(x+4,y+64,8,3); ctx.fillRect(x+15,y+64,8,3);
+  // fone na orelha
+  ctx.fillStyle=P.ltgray; ctx.fillRect(x+18,y+5,1,5);
+}
+
+function drawTinyGuardRunning(x,y){
+  ctx.fillStyle=P.black; ctx.fillRect(x,y,8,14);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y-4,6,5);
+  ctx.fillStyle=P.black; ctx.fillRect(x+1,y-7,6,4);
+  const k = Math.floor(Date.now()/120)%2;
+  ctx.fillStyle=P.black;
+  ctx.fillRect(x+(k?0:5),y+14,3,6); ctx.fillRect(x+(k?5:0),y+14,3,6);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+(k?-2:7),y+4,3,2); // braço estendido
+}
+
+function drawSquirrel(x,y){
+  const k = Math.floor(Date.now()/150)%2;
+  ctx.fillStyle=P.brown; ctx.fillRect(x,y,9,6);          // corpo
+  ctx.fillStyle=P.brown; ctx.fillRect(x+7,y-1,4,4);      // cabeça
+  ctx.fillStyle=P.brownDk; ctx.fillRect(x-4,y-6+(k?0:1),5,9); // cauda
+  ctx.fillStyle=P.black; ctx.fillRect(x+9,y,1,1);        // olho
+  if(game.flags.guardDistracted){ ctx.fillStyle=P.gold; ctx.fillRect(x+2,y+1,3,3); } // crachá no esquilo
+}
+
+function drawBush(x,y){
+  ctx.fillStyle=P.grassDk;
+  ctx.beginPath(); ctx.arc(x,y+18,16,0,7); ctx.arc(x+16,y+16,14,0,7); ctx.arc(x+30,y+18,15,0,7); ctx.fill();
+  ctx.fillStyle=P.green2;
+  for(let i=0;i<30;i++){
+    const px = x-12 + ((i*7)%44), py = y+4 + ((i*13)%20);
+    ctx.fillRect(px,py,2,2);
+  }
+}
+
+function drawFlavio(x,y,opt){
+  opt = opt||{};
+  const bob = game.walking ? Math.floor(game.bob)%2 : 0;
+  y += bob;
+  // cabelo (penteado pra disfarçar careca incipiente)
+  ctx.fillStyle=P.hair; ctx.fillRect(x+3,y,10,4); ctx.fillRect(x+2,y+2,12,3);
+  // rosto suado
+  ctx.fillStyle=P.skin; ctx.fillRect(x+4,y+4,9,8);
+  ctx.fillStyle=P.black; ctx.fillRect(x+5,y+6,2,2); ctx.fillRect(x+10,y+6,2,2); // olhos
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+8,y+8,1,2); // nariz
+  ctx.fillStyle=P.red; ctx.fillRect(x+6,y+10,5,1);   // sorriso nervoso
+  ctx.fillStyle=P.sky2; ctx.fillRect(x+12,y+3,2,2);  // gota de suor
+  // terno barato (largo demais)
+  ctx.fillStyle=P.dkgray; ctx.fillRect(x,y+12,17,22);
+  ctx.fillStyle=P.white;  ctx.fillRect(x+7,y+12,3,18); // camisa
+  ctx.fillStyle=P.red;    ctx.fillRect(x+8,y+13,1,14); // gravata do pai
+  // braços
+  ctx.fillStyle=P.dkgray;
+  if(opt.selfie){
+    ctx.fillRect(x-2,y+8,5,8); // braço pra cima segurando celular
+    ctx.fillStyle=P.black; ctx.fillRect(x-4,y+4,5,4);
+    ctx.fillStyle=P.sky2; ctx.fillRect(x-3,y+5,3,2);
+  } else {
+    ctx.fillStyle=P.dkgray; ctx.fillRect(x-1,y+14,3,14); ctx.fillRect(x+15,y+14,3,14);
+    ctx.fillStyle=P.skin; ctx.fillRect(x-1,y+27,3,3); ctx.fillRect(x+15,y+27,3,3);
+  }
+  // pernas (calça curta demais)
+  const k = game.walking ? Math.floor(game.bob)%2 : 0;
+  ctx.fillStyle=P.black;
+  ctx.fillRect(x+3+(k?1:0),y+34,5,12); ctx.fillRect(x+10-(k?1:0),y+34,5,12);
+  ctx.fillStyle=P.skin; ctx.fillRect(x+3,y+44,5,2); ctx.fillRect(x+10,y+44,5,2); // meia social aparecendo
+  ctx.fillStyle=P.brownDk; ctx.fillRect(x+2,y+46,6,3); ctx.fillRect(x+10,y+46,6,3);
+}
+
+/* =========================================================================
+   UI: barra de verbos + inventário + linha de comando
+   ========================================================================= */
+function buildSentence(hoverHot){
+  let s = VERBS.find(v=>v.id===curVerb).label;
+  if(usingItem){
+    s = (curVerb==='dar'?'Dar ':'Usar ') + ITEMS[usingItem].name + (curVerb==='dar'?' para':' com');
+  }
+  if(hoverHot){ s += ' ' + hoverHot; }
+  return s;
+}
+
+let hoverName = '';
+function drawUI(){
+  // fundo da UI
+  ctx.fillStyle=P.uiBg; ctx.fillRect(0,150,SCREEN_W,50);
+  ctx.fillStyle=P.uiLine; ctx.fillRect(0,150,SCREEN_W,1);
+
+  // linha de comando (sentence line)
+  ctx.fillStyle=P.black; ctx.fillRect(0,151,SCREEN_W,9);
+  txtCenter(buildSentence(hoverName), 152, usingItem?P.gold:P.green2, 1);
+
+  // verbos (2 colunas x 3)
+  for(let i=0;i<VERBS.length;i++){
+    const col = i%2, row = Math.floor(i/2);
+    const bx = 4 + col*64, by = 163 + row*12, bw=60, bh=10;
+    const sel = curVerb===VERBS[i].id;
+    ctx.fillStyle = sel ? P.uiLine : P.dkgray;
+    ctx.fillRect(bx,by,bw,bh);
+    ctx.fillStyle = P.black; ctx.fillRect(bx+bw-1,by,1,bh); ctx.fillRect(bx,by+bh-1,bw,1);
+    txt(VERBS[i].label, bx+4, by+2, sel?P.gold:P.ltgray, 1);
+    VERBS[i]._box=[bx,by,bw,bh];
+  }
+
+  // inventário (3x2 slots) à direita
+  const ix=176, iy=163, sw=44, sh=16;
+  for(let s=0;s<6;s++){
+    const col=s%3, row=Math.floor(s/3);
+    const sx=ix+col*46, sy=iy+row*16;
+    ctx.fillStyle=P.black; ctx.fillRect(sx,sy,sw-2,sh-1);
+    ctx.fillStyle=P.dkgray; ctx.fillRect(sx,sy,sw-2,1); ctx.fillRect(sx,sy,1,sh-1);
+    const item = game.inv[s];
+    if(item){
+      drawItemIcon(item, sx+1, sy+1);
+      if(usingItem===item){ ctx.strokeStyle=P.gold; ctx.lineWidth=1; ctx.strokeRect(sx+0.5,sy+0.5,sw-3,sh-2); }
+      game._invBoxes = game._invBoxes||{};
+      game._invBoxes[s]=[sx,sy,sw-2,sh-1,item];
+    } else if(game._invBoxes){ delete game._invBoxes[s]; }
+  }
+}
+
+function drawItemIcon(id,x,y){
+  if(id==='celular'){
+    ctx.fillStyle=P.black; ctx.fillRect(x+2,y+1,8,13);
+    ctx.fillStyle=P.sky2; ctx.fillRect(x+3,y+2,6,9);
+    ctx.fillStyle=P.white; ctx.fillRect(x+4,y+3,2,2);
+    txt('CEL',x+12,y+4,P.ltgray,1);
+  } else if(id==='cracha'){
+    ctx.fillStyle=P.white; ctx.fillRect(x+1,y+2,12,11);
+    ctx.fillStyle=P.blue; ctx.fillRect(x+1,y+2,12,3);
+    ctx.fillStyle=P.gold; ctx.fillRect(x+6,y,2,3);
+    txt('ID',x+15,y+4,P.ltgray,1);
+  } else if(id==='cachorro'){
+    ctx.fillStyle=P.brown; ctx.fillRect(x+1,y+5,14,5);
+    ctx.fillStyle=P.red;   ctx.fillRect(x+2,y+6,12,2); // salsicha
+    ctx.fillStyle=P.gold;  ctx.fillRect(x+3,y+5,9,1);  // mostarda
+    txt('DOG',x+1,y+11,P.ltgray,1);
+  }
+}
+
+/* =========================================================================
+   TELAS: BOOT / TÍTULO / CÓPIA / INTRO / VITÓRIA
+   ========================================================================= */
+function drawBoot(){
+  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  txt('TorteSoft BIOS v0.94', 8, 8, P.ltgray, 1);
+  txt('640K RAM ........ OK', 8, 18, P.ltgray, 1);
+  txt('Detectando placa de som...', 8, 28, P.ltgray, 1);
+  txt('  -> PC Speaker (1) encontrado.', 8, 38, P.gray, 1);
+  txt('Carregando FLAVIO.EXE', 8, 52, P.green2, 1);
+  const dots = '.'.repeat(Math.floor(bootTimer/12)%20);
+  txt(dots, 8, 62, P.green2, 1);
+  txt('C:\\JOGOS\\FLAVIO>_', 8, 180, P.ltgray, 1);
+}
+
+let titleBlink=0;
+function drawTitle(){
+  ditherSky();
+  ctx.fillStyle=P.grass; ctx.fillRect(0,120,SCREEN_W,80);
+  // mini casa branca
+  ctx.fillStyle=P.wwhite; ctx.fillRect(110,84,100,40);
+  ctx.fillStyle=P.shadow; for(let i=0;i<6;i++) ctx.fillRect(122+i*14,90,4,30);
+  ctx.fillStyle=P.white; ctx.beginPath(); ctx.moveTo(130,84); ctx.lineTo(190,84); ctx.lineTo(160,72); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=P.red; ctx.fillRect(159,64,8,4); ctx.fillStyle=P.gray; ctx.fillRect(159,64,1,8);
+
+  // título com "sombra" cafona
+  txtCenter('FLAVIO', 16, P.red, 4);
+  txtCenter('FLAVIO', 14, P.gold, 4);
+  txtCenter('na CASA BRANCA', 46, P.white, 2);
+  txtCenter('- A Aventura -', 60, P.ltgray, 1);
+
+  drawFlavio(150,128,{});
+
+  if(Math.floor(titleBlink/30)%2===0)
+    txtCenter('Clique para COMEÇAR', 150, P.green2, 1);
+  txtCenter('(c) 1994 TorteSoft  -  Disco 1 de 1', 178, P.gray, 1);
+  txtCenter('Pressione qualquer lugar. Tipo na vida.', 188, P.dkgray, 1);
+}
+
+let cpInput='';
+function drawCopyProt(){
+  ctx.fillStyle=P.blue; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  ctx.fillStyle=P.uiBg; ctx.fillRect(40,46,240,108);
+  ctx.fillStyle=P.uiLine; ctx.fillRect(40,46,240,2);
+  txtCenter('PROTECAO ANTI-PIRATARIA', 54, P.gold, 1);
+  const lines = [
+    'Consulte o MANUAL incluso na caixa.',
+    '',
+    'Qual a 3a palavra da pagina 14,',
+    'paragrafo 2, do manual do FLAVIO?',
+    '',
+    '(Voce nao tem o manual. Ninguem tem.',
+    ' Apague o que digitou e tecle ENTER.)',
+  ];
+  lines.forEach((l,i)=> txtCenter(l, 70+i*11, P.ltgray, 1));
+  ctx.fillStyle=P.black; ctx.fillRect(90,150,140,12);
+  txt(cpInput + (Math.floor(titleBlink/20)%2?'_':''), 94, 152, P.green2, 1);
+  txtCenter('[ENTER] = continuar   [ESC/clique] = tanto faz', 182, P.gray, 1);
+}
+
+function drawIntro(){
+  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  const lines = [
+    'Washington, D.C. Manha de quinta.',
+    '',
+    'Voce e FLAVIO. Semana passada, na padaria,',
+    'voce disse a TODO MUNDO que foi convidado',
+    'para uma reuniao com o PRESIDENTE dos EUA.',
+    '',
+    'Voce nao foi convidado.',
+    '',
+    'Mas ja comprou a passagem, ja alugou o',
+    'terno do seu pai e ja avisou o grupo da',
+    'familia. Voltar sem uma SELFIE com o',
+    'presidente seria... vergonha demais.',
+    '',
+    'OBJETIVO: entrar na Casa Branca e tirar',
+    'a foto. Custe a dignidade que custar.',
+  ];
+  lines.forEach((l,i)=> txt(l, 16, 14+i*11, i<2?P.gold:P.ltgray, 1));
+  if(Math.floor(titleBlink/30)%2===0)
+    txtCenter('> clique para comecar a vergonha <', 188, P.green2, 1);
+}
+
+function drawWin(){
+  // cena da vitória, multi-passo
+  ditherSky();
+  drawWhiteHouse();
+  ctx.fillStyle=P.uiBg; ctx.fillRect(0,150,SCREEN_W,50);
+  ctx.fillStyle=P.uiLine; ctx.fillRect(0,150,SCREEN_W,1);
+
+  // presidente acenando na varanda
+  const px=176, py=44;
+  ctx.fillStyle=P.skin; ctx.fillRect(px,py,8,7);
+  ctx.fillStyle=P.gray; ctx.fillRect(px,py-2,8,3);
+  ctx.fillStyle=P.dkgray; ctx.fillRect(px-1,py+7,10,8);
+  ctx.fillStyle=P.red; ctx.fillRect(px+3,py+8,2,6);
+  const w = Math.floor(Date.now()/200)%2;
+  ctx.fillStyle=P.skin; ctx.fillRect(px+8,py-2+(w?0:2),3,3); // mão acenando
+
+  // Flávio no portão tirando selfie
+  drawFlavio(160,108,{selfie:true});
+  // flash
+  if(winStep>=1 && winStep<3 && Math.floor(winTimer/4)%2===0){
+    ctx.fillStyle=P.white; ctx.fillRect(0,0,SCREEN_W,150);
+  }
+
+  // braços da segurança chegando (depois)
+  if(winStep>=2){
+    ctx.fillStyle=P.black; ctx.fillRect(120,118,40,10);
+    ctx.fillStyle=P.skinDk; ctx.fillRect(150,120,8,4);
+  }
+
+  // textos por passo
+  ctx.fillStyle=P.black; ctx.fillRect(8,156,304,40);
+  let t='';
+  if(winStep===0) t='Posto vazio. O presidente aparece na varanda pra acenar pra um grupo de escoteiros. Eu levanto o celular...';
+  else if(winStep===1) t='CLICK! Selfie tirada. Eu, suado, sorrindo demais, e ao fundo o presidente dos Estados Unidos, desfocado, acenando pra OUTRA pessoa. NAO IMPORTA. EU CONSEGUI.';
+  else if(winStep===2) t='Tres segurancas me derrubam no gramado mais bem cuidado do hemisferio norte. Minha gravata (do meu pai) voa. Mas o celular... o celular eu protejo com o corpo.';
+  else t='';
+  wrap(t,294,1).forEach((l,i)=> txt(l,12,158+i*9,P.ltgray,1));
+
+  if(winStep>=3) drawWinCard();
+}
+
+function drawWinCard(){
+  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  // moldura de foto
+  ctx.fillStyle=P.white; ctx.fillRect(70,20,180,120);
+  ctx.fillStyle=P.gray;  ctx.fillRect(76,26,168,96);
+  // foto: Flávio selfie + presidente borrado
+  ctx.fillStyle=P.grass; ctx.fillRect(76,26,168,96);
+  ctx.fillStyle=P.wwhite; ctx.fillRect(150,34,80,30);
+  drawFlavio(96,70,{selfie:true});
+  ctx.fillStyle=P.skin; ctx.fillRect(190,52,10,9); // presidente borradinho
+  ctx.fillStyle=P.dkgray; ctx.fillRect(189,61,12,12);
+  txt('FLAVIO + (?) PRESIDENTE', 84, 110, P.black, 1);
+
+  txtCenter('VOCE CONSEGUIU A SELFIE!', 150, P.gold, 1);
+  const sub = [
+    'Postado no grupo da familia: 47 curtidas.',
+    'Tia Marlene: "Que orgulho!! quem e o moco',
+    'atras de voce?". Voce nao respondeu.',
+    '',
+    'Valeu a pena? Nao. Voce passou vergonha? Sim.',
+    'Mas a foto e SUA. Pra sempre. FIM.',
+  ];
+  sub.forEach((l,i)=> txtCenter(l, 160+i*9, i>=4?P.ltgray:P.gray, 1));
+  if(Math.floor(titleBlink/30)%2===0) txtCenter('clique para jogar de novo', 192, P.green2, 1);
+}
+
+/* =========================================================================
+   RENDER PRINCIPAL
+   ========================================================================= */
+function drawGame(){
+  ditherSky();
+  drawWhiteHouse();
+  drawCart(12,86);
+  drawTrash(64,98);
+  drawBush(262,104);
+  drawTourist(100,74);
+  if(game.flags.squirrel) drawSquirrel(272,116);
+  // Flávio
+  drawFlavio(Math.round(game.flavioX),108,{});
+  drawGuard(158,60);
+
+  // fala/subtítulo no topo
+  if(speech){
+    const bw=296, bh = 8 + speech.lines.length*9;
+    ctx.fillStyle='rgba(8,8,16,0.85)';
+    ctx.fillStyle=P.black; ctx.fillRect(12,4,bw,bh);
+    ctx.fillStyle=P.uiLine; ctx.fillRect(12,4,bw,1);
+    speech.lines.forEach((l,i)=> txt(l, 18, 8+i*9, speech.color, 1));
+    txt('[clique p/ continuar]', 12+bw-86, 4+bh-1, P.gray, 1);
+  }
+
+  drawUI();
+}
+
+function render(){
+  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  switch(state){
+    case STATE.BOOT: drawBoot(); break;
+    case STATE.TITLE: drawTitle(); break;
+    case STATE.COPYPROT: drawCopyProt(); break;
+    case STATE.INTRO: drawIntro(); break;
+    case STATE.GAME: drawGame(); break;
+    case STATE.WIN: drawWin(); break;
+  }
+  // escala pro canvas visível (nearest neighbor)
+  vctx.imageSmoothingEnabled=false;
+  vctx.clearRect(0,0,view.width,view.height);
+  vctx.drawImage(buf,0,0,view.width,view.height);
+}
+
+/* =========================================================================
+   LOOP
+   ========================================================================= */
+function loop(){
+  titleBlink++; bootTimer++;
+  if(state===STATE.BOOT && bootTimer>150){ state=STATE.TITLE; }
+
+  // andar do Flávio
+  if(game.walking){
+    game.bob += 0.4;
+    const dx = game.flavioTargetX - game.flavioX;
+    if(Math.abs(dx) < 2){ game.flavioX = game.flavioTargetX; game.walking=false; }
+    else { game.flavioX += Math.sign(dx)*1.6; }
+  }
+
+  // sequência de vitória avança no tempo
+  if(state===STATE.WIN){
+    winTimer++;
+    if(winStep===0 && winTimer>70){ winStep=1; winTimer=0; camera(); }
+    else if(winStep===1 && winTimer>90){ winStep=2; winTimer=0; }
+    else if(winStep===2 && winTimer>110){ winStep=3; winTimer=0; triumph(); }
+  }
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================================
+   INPUT
+   ========================================================================= */
+function screenToBuf(ev){
+  const r = view.getBoundingClientRect();
+  const t = ev.touches ? ev.touches[0] : ev;
+  const x = (t.clientX - r.left) / r.width * SCREEN_W;
+  const y = (t.clientY - r.top)  / r.height * SCREEN_H;
+  return {x,y};
+}
+
+function pointInHot(x,y,h){ return x>=h.x && x<=h.x+h.w && y>=h.y && y<=h.y+h.h; }
+
+function handleClick(x,y){
+  initAudio();
+  clickSnd();
+
+  if(state===STATE.TITLE){ state=STATE.COPYPROT; cpInput=''; return; }
+  if(state===STATE.COPYPROT){ state=STATE.INTRO; return; }
+  if(state===STATE.INTRO){ state=STATE.GAME; say('Cheguei. A Casa Branca. Respira, Flávio. Aja natural. (Olhe e fale com as coisas. Para usar/dar um item, clique nele no inventário e depois no alvo.)', P.green2); return; }
+  if(state===STATE.WIN){
+    if(winStep>=3){ resetGame(); state=STATE.TITLE; }
+    else { winStep=Math.min(3,winStep+1); winTimer=0; if(winStep===3) triumph(); }
+    return;
+  }
+  if(state!==STATE.GAME) return;
+
+  // fala aberta -> fecha
+  if(speech){ clearSpeech(); return; }
+
+  // clique na UI?
+  if(y>=150){
+    // verbos
+    for(const v of VERBS){
+      if(v._box){ const[bx,by,bw,bh]=v._box;
+        if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh){ curVerb=v.id; if(v.id!=='usar'&&v.id!=='dar') usingItem=null; blip(); return; } }
+    }
+    // inventário
+    if(game._invBoxes){
+      for(const k in game._invBoxes){
+        const[sx,sy,sw,sh,item]=game._invBoxes[k];
+        if(x>=sx&&x<=sx+sw&&y>=sy&&y<=sy+sh){ clickInvItem(item); return; }
+      }
+    }
+    return;
+  }
+
+  // clique na cena -> hotspot?
+  for(const h of HOTSPOTS){
+    if(pointInHot(x,y,h)){
+      if(h.walkX!==undefined && curVerb!=='andar') walkTo(h.walkX);
+      interact(h.id);
+      return;
+    }
+  }
+  // clique no chão -> andar
+  if(y>70){ walkTo(x); }
+  else { if(usingItem){ usingItem=null; curVerb='olhar'; } }
+}
+
+function updateHover(x,y){
+  hoverName='';
+  if(state!==STATE.GAME || y>=150) return;
+  for(const h of HOTSPOTS){ if(pointInHot(x,y,h)){ hoverName=h.name; break; } }
+}
+
+view.addEventListener('mousedown', e=>{ const p=screenToBuf(e); handleClick(p.x,p.y); });
+view.addEventListener('mousemove', e=>{ const p=screenToBuf(e); updateHover(p.x,p.y); });
+view.addEventListener('touchstart', e=>{ e.preventDefault(); const p=screenToBuf(e); updateHover(p.x,p.y); handleClick(p.x,p.y); }, {passive:false});
+
+window.addEventListener('keydown', e=>{
+  if(state===STATE.COPYPROT){
+    if(e.key==='Enter'||e.key==='Escape'){ state=STATE.INTRO; }
+    else if(e.key==='Backspace'){ cpInput=cpInput.slice(0,-1); }
+    else if(e.key.length===1 && cpInput.length<18){ cpInput+=e.key; blip(); }
+    e.preventDefault();
+  }
+});
+
+function resetGame(){
+  game.inv=['celular'];
+  for(const k in game.flags) game.flags[k]=false;
+  game.flavioX=60; game.flavioTargetX=60; game.walking=false;
+  game._invBoxes={}; usingItem=null; curVerb='olhar'; speech=null;
+  winStep=0; winTimer=0;
+}
+
+/* =========================================================================
+   ESCALA RESPONSIVA: maior múltiplo inteiro que cabe na tela
+   ========================================================================= */
+function resize(){
+  const pad=8;
+  const maxW = window.innerWidth - pad, maxH = window.innerHeight - pad;
+  let scale = Math.floor(Math.min(maxW/SCREEN_W, maxH/SCREEN_H));
+  if(scale<1){ scale = Math.min(maxW/SCREEN_W, maxH/SCREEN_H); }
+  view.style.width = (SCREEN_W*scale)+'px';
+  view.style.height = (SCREEN_H*scale)+'px';
+}
+window.addEventListener('resize', resize);
+resize();
+loop();
+</script>
+</body>
+</html>
