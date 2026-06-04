@@ -16,14 +16,21 @@ presidente seria vergonha demais.
 
 ## Como jogar
 
-Interface estilo SCUMM:
+Feito pra **celular na vertical**. A cena em pixel-art fica no topo; embaixo,
+uma área de texto grande e legível, botões de verbo enormes e o inventário.
 
-1. Escolha um **verbo** (Olhar, Pegar, Usar, Falar com, Dar, Ir para).
-2. Clique numa coisa da cena.
-3. Para usar/dar um **item**, clique nele no inventário (canto direito) e
-   depois clique no alvo.
+1. Toque num **verbo** (Olhar, Pegar, Usar, Falar, Dar, Ir p/).
+2. Toque numa coisa da cena.
+3. Para usar/dar um **item**, toque nele no inventário e depois no alvo.
 
-Funciona com mouse (desktop) e toque (celular).
+Funciona com toque (celular) e mouse (desktop).
+
+### Por dentro
+
+A charada de legibilidade no celular foi resolvida separando as camadas:
+o `<canvas>` desenha **só** a cena pixel-art (320×150, escalada com
+nearest-neighbor), e **todo** o texto e os controles são HTML/CSS crisp em
+tamanho grande — nada de fonte borrada saindo de um buffer de baixa resolução.
 
 > Dica anti-frustração noventista: tudo que você precisa está na calçada.
 > Lixo, cachorro-quente e um esquilo são uma combinação mais poderosa do que

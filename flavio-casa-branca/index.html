@@ -2,1188 +2,650 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Flávio na Casa Branca - A Aventura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Flávio na Casa Branca — A Aventura</title>
 <style>
+  :root{
+    --tan:#caa86a; --tan-d:#7c5e34; --tan-l:#e6cf9a;
+    --panel:#241d15; --panel2:#15100a; --bezel:#000;
+    --ink:#f2e8d4; --muted:#b8a888; --green:#84d24a; --amber:#f0c04a; --red:#e06048;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{
-    margin:0;padding:0;background:#000;height:100%;
-    overflow:hidden;
-    font-family:"Courier New",monospace;
-    color:#aaa;
-    -webkit-user-select:none;user-select:none;
-    touch-action:none;
+    margin:0; height:100%; background:#000; overflow:hidden;
+    font-family:ui-monospace,"SFMono-Regular","Courier New",monospace;
+    color:var(--ink); -webkit-user-select:none; user-select:none; touch-action:manipulation;
   }
-  #wrap{
-    position:absolute;inset:0;
-    display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(#1a1a1a,#000);
+  #app{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+        background:radial-gradient(120% 120% at 50% 30%,#1a1a22,#000); padding:env(safe-area-inset-top) 0 0; }
+  #col{
+    position:relative; width:100%; max-width:460px; height:100%; max-height:980px;
+    display:flex; flex-direction:column; background:var(--panel2);
+    border-left:2px solid #000; border-right:2px solid #000; overflow:hidden;
   }
-  canvas{
-    image-rendering:pixelated;
-    image-rendering:crisp-edges;
-    image-rendering:-moz-crisp-edges;
-    cursor:crosshair;
-    box-shadow:0 0 0 2px #222, 0 0 40px #000 inset;
-    background:#000;
+  /* ---- cena pixel-art: preenche a largura em retrato; em paisagem a altura
+         é limitada e a cena faz letterbox (object-fit) — nunca distorce ---- */
+  #screen{ position:relative; width:100%; aspect-ratio:320/150; max-height:48vh;
+           background:#05060a; flex:0 0 auto; border-bottom:3px solid #000; }
+  #c{ display:block; width:100%; height:100%; object-fit:contain;
+      image-rendering:pixelated; image-rendering:crisp-edges; }
+  #tapname{ position:absolute; left:50%; top:6px; transform:translateX(-50%);
+            font-size:13px; color:var(--amber); background:rgba(0,0,0,.55); padding:2px 8px;
+            border-radius:2px; pointer-events:none; opacity:0; transition:opacity .12s; white-space:nowrap; }
+  /* ---- HUD ---- */
+  #hud{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }
+  #narration{
+    flex:1 1 auto; overflow-y:auto; padding:12px 14px; line-height:1.5;
+    font-size:clamp(15px,4.3vw,19px); color:var(--ink); background:var(--panel);
+    border-bottom:2px solid #000; -webkit-overflow-scrolling:touch;
   }
-  #hint{
-    position:absolute;bottom:4px;left:0;right:0;text-align:center;
-    font-size:11px;color:#444;pointer-events:none;
+  #narration b{ color:var(--amber); }
+  #action{
+    padding:7px 12px; font-size:clamp(13px,3.6vw,16px); color:var(--green);
+    background:#0c0a06; border-bottom:1px solid #000; min-height:30px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  #action .pick{ color:var(--amber); }
+  #verbs{ display:grid; grid-template-columns:repeat(3,1fr); gap:5px; padding:6px; }
+  .verb{
+    appearance:none; border:0; cursor:pointer; min-height:46px; padding:6px 4px;
+    font:inherit; font-size:clamp(12px,3.5vw,15px); color:#2a1d0c; background:var(--tan);
+    border-top:2px solid var(--tan-l); border-left:2px solid var(--tan-l);
+    border-bottom:3px solid var(--tan-d); border-right:3px solid var(--tan-d);
+    border-radius:3px; line-height:1.05;
+  }
+  .verb:active{ transform:translateY(1px); border-bottom-width:2px; }
+  .verb.sel{ background:var(--amber); color:#1a1206;
+             border-top-color:#fff0c0; border-left-color:#fff0c0; }
+  #inv{ display:flex; gap:6px; padding:0 6px 8px; overflow-x:auto; min-height:54px; -webkit-overflow-scrolling:touch; }
+  #inv:empty::after{ content:"(bolsos vazios)"; color:#5a4e3a; font-size:13px; align-self:center; padding:4px; }
+  .item{
+    flex:0 0 auto; display:flex; align-items:center; gap:6px; cursor:pointer;
+    padding:6px 10px 6px 6px; background:#1d2638; color:var(--ink); font-size:13px;
+    border-top:2px solid #38507a; border-left:2px solid #38507a;
+    border-bottom:3px solid #0a1020; border-right:3px solid #0a1020; border-radius:3px; white-space:nowrap;
+  }
+  .item:active{ transform:translateY(1px); }
+  .item.sel{ background:#5a4a1c; border-top-color:var(--amber); border-left-color:var(--amber); }
+  .item canvas{ width:32px; height:24px; image-rendering:pixelated; }
+  #endbar{ display:none; padding:10px; }
+  #endbar button{ width:100%; min-height:52px; font:inherit; font-size:16px; cursor:pointer;
+    color:#1a1206; background:var(--amber); border:0; border-bottom:4px solid #9c7414; border-radius:4px; }
+  /* ---- overlays (telas de menu/história) ---- */
+  #overlay{ position:absolute; inset:0; display:none; flex-direction:column;
+            background:rgba(6,5,10,.86); padding:18px; overflow-y:auto; z-index:5; }
+  #overlay.show{ display:flex; }
+  #overlay .ov{ margin:auto 0; }
+  #overlay h1{ font-size:clamp(30px,11vw,52px); letter-spacing:2px; margin:0; text-align:center;
+               color:var(--amber); text-shadow:3px 3px 0 var(--red), 0 0 1px #000; }
+  #overlay h2{ font-size:clamp(15px,4.6vw,20px); margin:4px 0 18px; text-align:center; color:var(--ink); }
+  #overlay p{ font-size:clamp(14px,4.2vw,17px); line-height:1.55; margin:0 0 12px; color:var(--ink); }
+  #overlay p.dim{ color:var(--muted); font-size:13px; }
+  #overlay p b{ color:var(--amber); }
+  #overlay .scene-mini{ text-align:center; font-size:40px; margin:6px 0 14px; }
+  #overlay input{ width:100%; font:inherit; font-size:18px; padding:10px; margin:6px 0 14px;
+                  background:#000; color:var(--green); border:2px solid var(--tan-d); border-radius:3px; }
+  #overlay button.go{ display:block; width:100%; min-height:54px; font:inherit; font-size:18px; cursor:pointer;
+    color:#1a1206; background:var(--green); border:0; border-bottom:4px solid #3c7a18; border-radius:4px; }
+  #overlay .credit{ text-align:center; color:#6a5e44; font-size:12px; margin-top:16px; }
+  #hint{ position:absolute; left:0; right:0; bottom:6px; text-align:center; font-size:11px; color:#4a4236; z-index:1; }
+  /* paisagem baixa: encolhe a cena e os controles p/ sobrar texto */
+  @media (orientation:landscape) and (max-height:560px){
+    #screen{ max-height:40vh; }
+    .verb{ min-height:38px; }
+    #inv{ min-height:46px; }
+    #narration{ font-size:clamp(14px,3.4vw,17px); }
   }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="c" width="320" height="200"></canvas></div>
-<div id="hint">Toque/clique para jogar &middot; o primeiro toque liga o "PC Speaker"</div>
+<div id="app"><div id="col">
+  <div id="screen">
+    <canvas id="c" width="320" height="150"></canvas>
+    <div id="tapname"></div>
+  </div>
+  <div id="hud">
+    <div id="narration"></div>
+    <div id="action"></div>
+    <div id="verbs"></div>
+    <div id="inv"></div>
+    <div id="endbar"><button id="replay">📸 Jogar de novo</button></div>
+  </div>
+  <div id="overlay"><div class="ov" id="ovc"></div></div>
+  <div id="hint">o primeiro toque liga o som (PC Speaker)</div>
+</div></div>
 <script>
 "use strict";
 /* =========================================================================
-   FLÁVIO NA CASA BRANCA — A AVENTURA  (c) 1994 TorteSoft (não)
-   Um autêntico point-and-click ruim de propósito.
-   Tudo desenhado à mão em 320x200. Sem assets externos. Sem vergonha.
+   FLÁVIO NA CASA BRANCA — A AVENTURA
+   Arquitetura: cena em pixel-art no <canvas> (320x150, escalado pixelado) +
+   TODO texto/UI em DOM crisp e grande (legível no celular vertical).
    ========================================================================= */
 
-const SCREEN_W = 320;
-let   SCREEN_H = 200;            // cresce em retrato (UI maior p/ toque)
-const SCENE_H  = 150;           // a cena ocupa sempre 0..150; UI vem depois
-let   portrait = false;
-let   dlgScale = 1;             // tamanho da fonte dos diálogos (maior no celular)
-const view = document.getElementById('c');
-const vctx = view.getContext('2d');
-vctx.imageSmoothingEnabled = false;
+/* ---------- canvas da cena ---------- */
+const SCREEN_W=320, SCREEN_H=150;
+const cv = document.getElementById('c');
+let ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled=false;
 
-// Offscreen — desenhamos aqui e escalamos com nearest-neighbor.
-const buf = document.createElement('canvas');
-buf.width = SCREEN_W; buf.height = SCREEN_H;
-let ctx = buf.getContext('2d');
-ctx.imageSmoothingEnabled = false;
-ctx.textBaseline = 'top';
+const bgCanvas=document.createElement('canvas');
+bgCanvas.width=SCREEN_W; bgCanvas.height=SCREEN_H;
+const bgctx=bgCanvas.getContext('2d'); bgctx.imageSmoothingEnabled=false;
+let bgBuilt=false;
 
-// Cache do fundo estático (céu+casa+gramado+cerca): caro de redesenhar
-// (gradiente com dithering) então renderizamos uma vez.
-const bgCanvas = document.createElement('canvas');
-bgCanvas.width = SCREEN_W; bgCanvas.height = SCENE_H;
-const bgctx = bgCanvas.getContext('2d');
-bgctx.imageSmoothingEnabled = false; bgctx.textBaseline = 'top';
-let bgBuilt = false;
-
-/* ---- Paleta VGA "pintada" estilo Full Throttle: tons quentes,
-        sombras frias, luz direcional ---- */
+/* ---------- paleta ---------- */
 const P = {
-  // céu (do topo escuro ao horizonte com névoa quente)
   skyTop:'#36488f', skyMid:'#5878c8', skyLow:'#9fb6e2', skyHaze:'#e6d2b0',
   cloud:'#eef0f6', cloudSh:'#aeb8d8',
-  // branco da Casa (face ao sol quente / sombra fria)
-  whiteHi:'#fffdf0', white:'#f4f0e0', wwhite:'#ddd8c4', shadow:'#a6a8be', whiteSh:'#888aa8',
-  cool:'#6e74a0',
-  // gramado
+  whiteHi:'#fffdf0', white:'#f4f0e0', wwhite:'#ddd8c4', shadow:'#a6a8be', whiteSh:'#888aa8', cool:'#6e74a0',
   grassHi:'#52a83e', grass:'#2c7a2c', grassDk:'#1f5a1f', grassSh:'#143e18',
-  // calçada
   path:'#cdb888', pathHi:'#e0cfa2', pathDk:'#9c8456', pathSh:'#766240',
-  // cores gerais
   red:'#c83030', redDk:'#8a1d1d', blue:'#3048a8', blueLt:'#5a78d8', gold:'#e0b828', goldDk:'#9c7a14',
   skin:'#e0a878', skinHi:'#f2c898', skinDk:'#b07848', skinSh:'#8a5836', hair:'#503018', hairHi:'#6e4824',
   black:'#0e0e16', dkgray:'#2a2a3a', gray:'#707080', ltgray:'#b8b8c4', white2:'#f0f0f4',
-  uiBg:'#322a26', uiBg2:'#241e1b', uiHi:'#5a4a3e', uiLine:'#7a6450', uiSel:'#a8783c',
   green2:'#46c83c', brown:'#7a5020', brownHi:'#9c6c2c', brownDk:'#4a2e0e',
   metal:'#9aa0b0', metalHi:'#c4c8d4', metalDk:'#585e72',
 };
-
-/* Bayer 4x4 p/ gradientes com dithering ordenado (look "pintado" de VGA). */
-const BAYER = [0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5];
-function ditherGrad(g, x0,y0,w,h, cTop,cBot){
-  g.fillStyle = cTop; g.fillRect(x0,y0,w,h);
-  g.fillStyle = cBot;
-  for(let y=0;y<h;y++){
-    const t = h>1 ? y/(h-1) : 0;
-    for(let x=0;x<w;x++){
-      const thr = (BAYER[((y&3)<<2)|(x&3)] + 0.5)/16;
-      if(t > thr) g.fillRect(x0+x, y0+y, 1, 1);
-    }
-  }
+const BAYER=[0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5];
+function ditherGrad(g,x0,y0,w,h,cTop,cBot){
+  g.fillStyle=cTop; g.fillRect(x0,y0,w,h); g.fillStyle=cBot;
+  for(let y=0;y<h;y++){ const t=h>1?y/(h-1):0;
+    for(let x=0;x<w;x++){ if(t>(BAYER[((y&3)<<2)|(x&3)]+0.5)/16) g.fillRect(x0+x,y0+y,1,1); } }
 }
 
-/* ---- "PC Speaker" beeps via WebAudio ---- */
-let audioCtx = null, soundOn = false;
-function initAudio(){
-  if(audioCtx) return;
-  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); soundOn = true; }
-  catch(e){ soundOn = false; }
+/* ---------- "PC Speaker" ---------- */
+let audioCtx=null, soundOn=false;
+function initAudio(){ if(audioCtx) return;
+  try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); soundOn=true; }catch(e){ soundOn=false; }
+  if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
 }
-function beep(freq, dur, type, vol){
-  if(!soundOn||!audioCtx) return;
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = type||'square'; o.frequency.value = freq;
-  g.gain.value = vol||0.05;
+function beep(f,d,t,v){ if(!soundOn) return;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=t||'square'; o.frequency.value=f; g.gain.value=v||0.05;
   o.connect(g); g.connect(audioCtx.destination);
-  const t = audioCtx.currentTime;
-  o.start(t); o.stop(t + (dur||0.05));
-  g.gain.setValueAtTime(g.gain.value, t);
-  g.gain.linearRampToValueAtTime(0.0001, t + (dur||0.05));
+  const n=audioCtx.currentTime; o.start(n); o.stop(n+(d||0.05));
+  g.gain.setValueAtTime(g.gain.value,n); g.gain.linearRampToValueAtTime(0.0001,n+(d||0.05));
 }
-function blip(){ beep(660,0.03,'square',0.04); }
-function clickSnd(){ beep(220,0.04,'square',0.05); }
-function sadTrombone(){
-  if(!soundOn) return;
-  const ns=[233,220,196,165];
-  ns.forEach((f,i)=>setTimeout(()=>beep(f,0.28,'sawtooth',0.06),i*230));
-}
-function triumph(){
-  if(!soundOn) return;
-  const ns=[523,659,784,1046];
-  ns.forEach((f,i)=>setTimeout(()=>beep(f,0.18,'square',0.06),i*150));
-}
+const blip=()=>beep(660,0.03,'square',0.04);
+const clickSnd=()=>beep(220,0.04,'square',0.05);
+function sadTrombone(){ [233,220,196,165].forEach((f,i)=>setTimeout(()=>beep(f,0.28,'sawtooth',0.06),i*230)); }
+function triumph(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,0.18,'square',0.06),i*150)); }
 function camera(){ beep(1500,0.02,'square',0.07); setTimeout(()=>beep(120,0.12,'sawtooth',0.05),40); }
 
 /* =========================================================================
-   FONTE: usamos a fonte do canvas em tamanho pequeno; ao escalar 3x com
-   nearest-neighbor ela fica bem chunky e oitentista/noventista.
+   ESTADO / DADOS
    ========================================================================= */
-function txt(s, x, y, color, scale){
-  scale = scale||1;
-  ctx.fillStyle = color || P.white;
-  ctx.font = (6*scale)+'px "Courier New",monospace';
-  ctx.fillText(s, Math.round(x), Math.round(y));
-}
-function txtW(s, scale){
-  scale = scale||1;
-  ctx.font = (6*scale)+'px "Courier New",monospace';
-  return ctx.measureText(s).width;
-}
-function txtCenter(s, y, color, scale){
-  txt(s, (SCREEN_W - txtW(s,scale))/2, y, color, scale);
-}
-// texto com sombra/contorno — bem mais legível em tela de celular
-function txtSh(s, x, y, color, scale){
-  txt(s, x+1, y+1, P.black, scale);
-  txt(s, x,   y,   color,   scale);
-}
-function txtCenterSh(s, y, color, scale){
-  txtSh(s, (SCREEN_W - txtW(s,scale))/2, y, color, scale);
-}
-function wrap(s, maxW, scale){
-  scale=scale||1;
-  const words = s.split(' ');
-  const lines=[]; let cur='';
-  for(const w of words){
-    const t = cur ? cur+' '+w : w;
-    if(txtW(t,scale) > maxW && cur){ lines.push(cur); cur=w; }
-    else cur=t;
+const STATE={ TITLE:0, INTRO:1, COPY:2, GAME:3, WIN:4 };
+let state=STATE.TITLE;
+
+const game={
+  inv:['celular'],
+  flags:{ talkedGuard:false, gotBadge:false, gaveBadge:false, gotDog:false,
+          squirrel:false, guardDistracted:false, won:false },
+  flavioX:60, flavioTargetX:60, walking:false, facing:1, bob:0,
+};
+const ITEMS={
+  celular:{ name:'Celular',  desc:'Meu celular. Tela rachada, mas a câmera funciona — é o que importa pra selfie histórica.' },
+  cracha:{  name:'Crachá Vencido', desc:'Crachá plastificado que achei no lixo. Diz "VISITOR — STENOGRAPHER, FLAVIA" e venceu em 1998. Serve.' },
+  cachorro:{name:'Cachorro-Quente', desc:'Cachorro-quente que o vendedor me deu de pena. Pouco molho. A vida é assim.' },
+};
+const VERBS=[
+  {id:'olhar',label:'Olhar'}, {id:'pegar',label:'Pegar'}, {id:'usar',label:'Usar'},
+  {id:'falar',label:'Falar'}, {id:'dar',label:'Dar'}, {id:'andar',label:'Ir p/'},
+];
+let curVerb='olhar', usingItem=null;
+
+const HOTSPOTS=[
+  {id:'guarda', name:'Segurança Brad', x:150,y:55,w:48,h:90, walkX:140},
+  {id:'portao', name:'Portão da Casa Branca', x:196,y:40,w:60,h:105, walkX:182},
+  {id:'cart',   name:'Carrinho de Cachorro-Quente', x:8,y:74,w:52,h:52, walkX:62},
+  {id:'turista',name:'Turista', x:96,y:72,w:28,h:66, walkX:92},
+  {id:'lixo',   name:'Lata de Lixo', x:62,y:92,w:22,h:34, walkX:80},
+  {id:'arbusto',name:'Arbusto', x:258,y:100,w:50,h:38, walkX:250},
+  {id:'casa',   name:'Casa Branca', x:120,y:4,w:170,h:40, walkX:140},
+];
+
+/* =========================================================================
+   NARRAÇÃO / DOM
+   ========================================================================= */
+const elNarr=document.getElementById('narration');
+const elAction=document.getElementById('action');
+const elVerbs=document.getElementById('verbs');
+const elInv=document.getElementById('inv');
+const elEnd=document.getElementById('endbar');
+const elTapName=document.getElementById('tapname');
+const elOverlay=document.getElementById('overlay');
+const elOvc=document.getElementById('ovc');
+
+function say(html,color){ elNarr.innerHTML=html; elNarr.style.color=color||'var(--ink)'; elNarr.scrollTop=0; blip(); }
+
+let tapNameTimer=0;
+function flashName(n){ elTapName.textContent=n; elTapName.style.opacity='1'; tapNameTimer=90; }
+
+function findItem(id){ return game.inv.indexOf(id)>=0; }
+function addItem(id){ if(!findItem(id)){ game.inv.push(id); buildInventory(); } }
+function removeItem(id){ const i=game.inv.indexOf(id); if(i>=0){ game.inv.splice(i,1); buildInventory(); } }
+function walkTo(x){ game.flavioTargetX=Math.max(20,Math.min(262,x));
+  game.facing=game.flavioTargetX<game.flavioX?-1:1; game.walking=true; }
+
+function buildVerbs(){
+  elVerbs.innerHTML='';
+  for(const v of VERBS){
+    const b=document.createElement('button');
+    b.className='verb'+(curVerb===v.id?' sel':''); b.textContent=v.label;
+    b.onclick=()=>{ initAudio(); curVerb=v.id; if(v.id!=='usar'&&v.id!=='dar') usingItem=null; clickSnd(); refreshVerbs(); updateAction(); };
+    elVerbs.appendChild(b);
   }
-  if(cur) lines.push(cur);
-  return lines;
+}
+function refreshVerbs(){ [...elVerbs.children].forEach((b,i)=> b.classList.toggle('sel',VERBS[i].id===curVerb)); }
+
+function buildInventory(){
+  elInv.innerHTML='';
+  for(const id of game.inv){
+    const d=document.createElement('div');
+    d.className='item'+(usingItem===id?' sel':'');
+    const ic=document.createElement('canvas'); ic.width=32; ic.height=24;
+    drawItemIcon(ic.getContext('2d'), id);
+    const sp=document.createElement('span'); sp.textContent=ITEMS[id].name;
+    d.appendChild(ic); d.appendChild(sp);
+    d.onclick=()=>{ initAudio(); clickInvItem(id); };
+    elInv.appendChild(d);
+  }
+}
+function refreshInv(){ [...elInv.children].forEach((d,i)=> d.classList.toggle('sel',usingItem===game.inv[i])); }
+
+function updateAction(){
+  let s=VERBS.find(v=>v.id===curVerb).label;
+  if(usingItem && (curVerb==='usar'||curVerb==='dar')){
+    s=(curVerb==='dar'?'Dar ':'Usar ')+'<span class="pick">'+ITEMS[usingItem].name+'</span>'+
+      (curVerb==='dar'?' para… ':' com… ')+'(toque no alvo)';
+  } else if(curVerb==='usar'||curVerb==='dar'){
+    s+=' … (escolha um item, depois o alvo)';
+  } else {
+    s+=' …';
+  }
+  elAction.innerHTML=s;
+}
+
+function clickInvItem(id){
+  if(curVerb==='usar'||curVerb==='dar'){
+    usingItem=(usingItem===id?null:id); clickSnd();
+  } else {
+    usingItem=null; say(ITEMS[id].desc,'var(--muted)'); // só inspeciona
+  }
+  refreshInv(); updateAction();
 }
 
 /* =========================================================================
-   ESTADO DO JOGO
+   LÓGICA DAS INTERAÇÕES (humor constrangedor)
    ========================================================================= */
-const STATE = { BOOT:0, TITLE:1, COPYPROT:2, INTRO:3, GAME:4, WIN:5 };
-let state = STATE.BOOT;
-let bootTimer = 0;
-
-const game = {
-  inv: ['celular'],            // Flávio já chega com o celular (claro)
-  flags: {
-    talkedGuard:false, gotBadge:false, gaveBadge:false, gotDog:false,
-    squirrel:false, guardDistracted:false, won:false,
-  },
-  flavioX: 60, flavioTargetX: 60, walking:false, facing:1, bob:0,
-};
-
-// Itens: ícone desenhado + nome
-const ITEMS = {
-  celular:  { name:'Celular',          desc:'Meu celular. Tela rachada, mas a câmera funciona. É o que importa pra selfie histórica.' },
-  cracha:   { name:'Crachá Vencido',   desc:'Um crachá plastificado que achei no lixo. Diz "VISITOR - STENOGRAPHER" e venceu em 1998. Serve.' },
-  cachorro: { name:'Cachorro-Quente',  desc:'Cachorro-quente que o vendedor me deu de pena. Tem pouco molho. A vida é assim.' },
-};
-
-/* ---- Verbos estilo SCUMM ---- */
-const VERBS = [
-  {id:'olhar', label:'Olhar'},
-  {id:'pegar', label:'Pegar'},
-  {id:'usar',  label:'Usar'},
-  {id:'falar', label:'Falar com'},
-  {id:'dar',   label:'Dar'},
-  {id:'andar', label:'Ir para'},
-];
-let curVerb = 'olhar';
-let usingItem = null;     // item selecionado para "Usar X com Y" / "Dar X para Y"
-
-/* ---- Hotspots da cena (coordenadas no mundo 320x150) ---- */
-const HOTSPOTS = [
-  {id:'guarda',  name:'Segurança Brad', x:158, y:60,  w:34, h:80, walkX:140},
-  {id:'portao',  name:'Portão da Casa Branca', x:196, y:40, w:60, h:100, walkX:182},
-  {id:'cart',    name:'Carrinho de Cachorro-Quente', x:10, y:78, w:46, h:46, walkX:62},
-  {id:'turista', name:'Turista', x:100, y:74, w:20, h:62, walkX:92},
-  {id:'lixo',    name:'Lata de Lixo', x:64, y:96, w:18, h:28, walkX:80},
-  {id:'arbusto', name:'Arbusto', x:262, y:104, w:42, h:30, walkX:250},
-  {id:'casa',    name:'Casa Branca', x:120, y:8,  w:170, h:36, walkX:140},
-];
-
-/* ---- Falas (subtítulo no topo). Guardamos o texto cru e quebramos as
-        linhas na hora de desenhar, p/ refluir conforme o tamanho da fonte. */
-let speech = null;        // {text, color}
-function say(s, color){
-  speech = { text: s, color: color||P.white };
-  blip();
-}
-function clearSpeech(){ speech = null; }
-
-/* =========================================================================
-   LÓGICA DAS INTERAÇÕES  — o coração do humor constrangedor
-   ========================================================================= */
-function findItem(id){ return game.inv.indexOf(id) >= 0; }
-function addItem(id){ if(!findItem(id)){ game.inv.push(id); blip(); } }
-function removeItem(id){ const i=game.inv.indexOf(id); if(i>=0) game.inv.splice(i,1); }
-
 function interact(hotId){
-  const hs = HOTSPOTS.find(h=>h.id===hotId);
-  const f = game.flags;
+  const hs=HOTSPOTS.find(h=>h.id===hotId); const f=game.flags;
 
-  // ---- USAR / DAR um item do inventário em um hotspot ----
   if(usingItem){
-    const it = usingItem;
-    const action = curVerb; // 'usar' ou 'dar'
-    usingItem = null; curVerb = 'olhar';
+    const it=usingItem, action=curVerb; usingItem=null; curVerb='olhar';
+    refreshVerbs(); refreshInv(); updateAction();
 
-    // DAR crachá / cachorro pro guarda
-    if((it==='cracha') && hotId==='guarda'){
-      if(!f.gotDog && !f.squirrel){
-        f.gaveBadge = true;
-        say('Brad pega o crachá, lê devagar e devolve: "Senhor, isso é um crachá de ESTENÓGRAFA, venceu em 1998, e tá escrito FLÁVIA. ...O senhor é a Flávia?" Eu: "Sou primo dela." Ele só me encara.', P.white);
-        sadTrombone();
-        return;
-      }
+    if(it==='cracha' && hotId==='guarda' && !f.gotDog && !f.squirrel){
+      f.gaveBadge=true;
+      say('Brad pega o crachá, lê devagar e devolve: <b>"Senhor, isso é um crachá de ESTENÓGRAFA, venceu em 1998, e está escrito FLAVIA. ...O senhor é a Flavia?"</b> Eu: "Sou primo dela." Ele só me encara.');
+      sadTrombone(); return;
     }
     if(it==='cachorro' && hotId==='guarda'){
-      say('Eu ofereço o cachorro-quente pro Brad. "Comi às 6h, senhor. E sou vegano." Ele olha pro salsicha encharcada de molho na minha mão. Eu continuo segurando. Ninguém fala nada por uns 8 segundos.', P.white);
-      sadTrombone();
-      return;
+      say('Ofereço o cachorro-quente pro Brad. <b>"Comi às 6h, senhor. E sou vegano."</b> Ele olha pra salsicha encharcada de molho na minha mão. Eu continuo segurando. Ninguém fala nada por uns 8 segundos.');
+      sadTrombone(); return;
     }
     if(it==='cachorro' && hotId==='turista'){
-      say('A turista recusa: "No, thank you." Eu insisto em inglês: "Is free, is free, very gostoso." Ela atravessa a rua.', P.white);
-      sadTrombone();
+      say('A turista recusa: "No, thank you." Eu insisto em inglês: <b>"Is free, is free, very gostoso."</b> Ela atravessa a rua.');
+      sadTrombone(); return;
+    }
+    if(it==='cachorro' && hotId==='arbusto'){
+      if(!f.squirrel){ removeItem('cachorro'); f.squirrel=true;
+        say('Coloco o cachorro-quente no arbusto feito isca. Um <b>esquilo</b> gordo da Casa Branca aparece na hora e começa a roer. Ele me olha. Eu olho pra ele. Temos um plano agora. (Eu tenho um plano.)','var(--green)');
+        beep(880,0.05,'square',0.05);
+      } else say('O esquilo já está lá detonando o lanche. Não vou atrapalhar o artista.');
       return;
     }
-
-    // PUZZLE: usar cachorro-quente no arbusto -> atrai esquilo
-    if(it==='cachorro' && hotId==='arbusto'){
-      if(!f.squirrel){
-        removeItem('cachorro');
-        f.squirrel = true;
-        say('Coloco o cachorro-quente no arbusto feito isca. Um esquilo gordo da Casa Branca aparece na hora e começa a roer. Ele me olha. Eu olho pra ele. Temos um plano agora. (Eu tenho um plano.)', P.green2);
-        beep(880,0.05,'square',0.05);
-        return;
-      } else {
-        say('O esquilo já tá lá detonando o lanche. Não vou atrapalhar o artista.', P.white);
-        return;
-      }
-    }
-
-    // PUZZLE: usar crachá no esquilo (prende no esquilo -> "intruso identificado")
     if(it==='cracha' && hotId==='arbusto'){
-      if(f.squirrel && !f.guardDistracted){
-        removeItem('cracha');
-        f.guardDistracted = true;
-        say('Prendo o crachá "VISITOR" no esquilo com a presilha. Agora ele é um visitante CREDENCIADO. O esquilo dispara em direção ao portão. Brad grita "INTRUDER WITH BADGE!" e sai correndo atrás dele. O posto ficou VAZIO.', P.gold);
+      if(f.squirrel && !f.guardDistracted){ removeItem('cracha'); f.guardDistracted=true;
+        say('Prendo o crachá "VISITOR" no esquilo com a presilha. Agora ele é um visitante <b>CREDENCIADO</b>. O esquilo dispara pro portão. Brad grita "INTRUDER WITH BADGE!" e sai correndo atrás dele. <b>O posto ficou VAZIO.</b>','var(--amber)');
         triumph();
-        return;
-      } else if(!f.squirrel){
-        say('Não tem esquilo nenhum aqui. Eu ia prender o crachá em quê? No arbusto? Que vergonha pensar nisso.', P.white);
-        return;
-      }
+      } else if(!f.squirrel){ say('Não tem esquilo nenhum aqui. Eu ia prender o crachá em quê, no arbusto? Que vergonha pensar nisso.'); }
+      return;
     }
-
-    // Usar celular no portão / na casa quando o guarda saiu = VITÓRIA
     if(it==='celular' && (hotId==='portao'||hotId==='casa'||hotId==='guarda')){
       if(f.guardDistracted){ winSequence(); return; }
-      say('Levanto o celular pra tirar a selfie, mas o Brad ainda tá aqui plantado feito poste. Ele tampa a câmera com a mão. "No photos, sir." Preciso tirar ele daqui.', P.white);
+      say('Levanto o celular pra selfie, mas o Brad ainda está aqui plantado feito poste. Ele tampa a câmera com a mão. <b>"No photos, sir."</b> Preciso tirar ele daqui.');
       return;
     }
-
-    // fallback genérico
-    const itName = ITEMS[it].name;
-    say('Tento usar '+itName.toLowerCase()+' com '+(hs?hs.name.toLowerCase():'isso')+'. Não acontece nada. Algumas pessoas filmam com o celular. Pra postar.', P.white);
+    say('Tento usar '+ITEMS[it].name.toLowerCase()+' com '+(hs?hs.name.toLowerCase():'isso')+'. Não acontece nada. Algumas pessoas filmam com o celular. Pra postar.');
     return;
   }
 
-  // ---- Verbos simples sobre hotspots ----
   switch(hotId){
     case 'casa':
-      if(curVerb==='olhar') say('A Casa Branca. Branca, grande, cheia de colunas. Eu deveria estar LÁ DENTRO, sentado do lado do presidente, comendo uns salgadinhos importados. Em vez disso tô aqui na calçada suando na gravata do meu pai.', P.white);
-      else if(curVerb==='andar') say('Tem um portão, um guarda de 1,90m e o bom senso entre mim e a Casa Branca. Detalhes.', P.white);
-      else say('Não dá pra fazer isso com um prédio histórico, Flávio. Controle-se.', P.white);
+      if(curVerb==='olhar') say('A Casa Branca. Branca, grande, cheia de colunas. Eu <b>deveria</b> estar lá dentro, do lado do presidente, comendo uns salgadinhos importados. Em vez disso, suo na gravata do meu pai aqui na calçada.');
+      else if(curVerb==='andar') say('Tem um portão, um guarda de 1,90m e o bom senso entre mim e a Casa Branca. Detalhes.');
+      else say('Não dá pra fazer isso com um prédio histórico, Flávio. Controle-se.');
       break;
-
     case 'portao':
-      if(curVerb==='olhar') say('Portão de ferro preto com águia dourada. Trancado. Atrás dele, o gramado mais bem cuidado do hemisfério norte.', P.white);
-      else if(curVerb==='pegar') say('Eu sacudo o portão. Faz barulho. O guarda tosse. Eu paro. Disfarço assobiando o hino do Brasil errado.', P.white);
-      else if(curVerb==='usar'){
-        if(game.flags.guardDistracted){ say('Com o Brad longe, eu poderia tentar a selfie agora. (Dica: USE o CELULAR no portão.)', P.gold); }
-        else say('O portão não abre. E o Brad não tira o olho de mim. Tenho que dar um jeito nesse guarda primeiro.', P.white);
-      }
-      else if(curVerb==='andar'){ walkTo(182); say('Chego perto do portão. O cheiro de poder e grama recém-cortada.', P.white); }
-      else say('O portão não tá interessado em conversa, Flávio.', P.white);
+      if(curVerb==='olhar') say('Portão de ferro preto com águia dourada. Trancado. Atrás dele, o gramado mais bem cuidado do hemisfério norte.');
+      else if(curVerb==='pegar') say('Sacudo o portão. Faz barulho. O guarda tosse. Eu paro e disfarço assobiando o hino do Brasil errado.');
+      else if(curVerb==='usar'){ if(game.flags.guardDistracted) say('Com o Brad longe, dá pra tentar a selfie agora. <b>Use o Celular no portão.</b>','var(--amber)');
+        else say('O portão não abre, e o Brad não tira o olho de mim. Tenho que dar um jeito nesse guarda primeiro.'); }
+      else if(curVerb==='andar'){ walkTo(182); say('Chego perto do portão. Cheiro de poder e grama recém-cortada.'); }
+      else say('O portão não está interessado em conversa, Flávio.');
       break;
-
     case 'guarda':
-      if(curVerb==='olhar') say('Brad. Segurança. Óculos escuros mesmo nublado. Tem um fone na orelha e zero dúvidas sobre quem eu NÃO sou.', P.white);
-      else if(curVerb==='falar'){
-        game.flags.talkedGuard = true;
-        if(game.flags.guardDistracted){
-          say('O Brad sumiu atrás de um esquilo credenciado. Não tem com quem falar. APROVEITA.', P.gold);
-        } else {
-          say('Eu: "Bom dia! Flávio, sou convidado da reunião presidencial." Brad confere a prancheta. "...Não tem nenhum Flávio aqui." Eu: "Procura por Flávio com PH." Ele: "...Não." Eu: "Tenta de novo, com carinho." Uns turistas pararam pra assistir.', P.white);
-        }
-      }
-      else if(curVerb==='dar'){ say('Pra dar algo pro Brad eu preciso escolher o item no inventário primeiro. (Clique no item, depois nele.)', P.ltgray); }
-      else if(curVerb==='pegar') say('Eu não vou PEGAR no segurança da Casa Branca. Já tô numa situação delicada o suficiente.', P.white);
-      else if(curVerb==='andar'){ walkTo(140); }
-      else say('O Brad não reage. Profissional.', P.white);
+      if(curVerb==='olhar') say('Brad. Segurança. Óculos escuros mesmo nublado, fone na orelha e zero dúvida sobre quem eu <b>não</b> sou.');
+      else if(curVerb==='falar'){ game.flags.talkedGuard=true;
+        if(game.flags.guardDistracted) say('O Brad sumiu atrás de um esquilo credenciado. Não tem com quem falar. <b>APROVEITA.</b>','var(--amber)');
+        else say('Eu: "Bom dia! Flávio, convidado da reunião presidencial." Brad confere a prancheta. "...Não tem nenhum Flávio aqui." Eu: "Procura por Flávio com PH." Ele: "...Não." Eu: <b>"Tenta de novo, com carinho."</b> Uns turistas pararam pra assistir.'); }
+      else if(curVerb==='dar') say('Pra dar algo pro Brad, escolha o item no inventário primeiro.','var(--muted)');
+      else if(curVerb==='pegar') say('Não vou <b>pegar</b> no segurança da Casa Branca. Já estou numa situação delicada o suficiente.');
+      else if(curVerb==='andar') walkTo(140);
+      else say('O Brad não reage. Profissional.');
       break;
-
     case 'cart':
-      if(curVerb==='olhar') say('Carrinho de cachorro-quente. O vendedor, Sérgio (crachá: "SERGIO"), brasileiro também, me reconheceu pela cara de perdido.', P.white);
-      else if(curVerb==='falar'||curVerb==='pegar'){
-        if(!game.flags.gotDog){
-          game.flags.gotDog = true;
-          addItem('cachorro');
-          say('Sérgio: "Conterrâneo, qual foi?" Eu conto tudo. Ele faz que sim com pena, me dá um cachorro-quente DE GRAÇA e diz: "Vai por mim, volta pro hotel." Eu pego o lanche. (Pego a dignidade não.)', P.green2);
-        } else {
-          say('Sérgio: "Já te dei um, parceiro. Agora é por minha conta NÃO te dar mais." Ele tem razão.', P.white);
-        }
-      }
-      else if(curVerb==='usar') say('Mexer no carrinho dele sem permissão? Não. Já tô representando mal o Brasil o bastante hoje.', P.white);
-      else if(curVerb==='andar'){ walkTo(62); }
-      else say('...', P.white);
+      if(curVerb==='olhar') say('Carrinho de cachorro-quente. O vendedor, Sérgio (crachá: "SERGIO"), brasileiro também, me reconheceu pela cara de perdido.');
+      else if(curVerb==='falar'||curVerb==='pegar'){ if(!game.flags.gotDog){ game.flags.gotDog=true; addItem('cachorro');
+          say('Sérgio: "Conterrâneo, qual foi?" Conto tudo. Ele faz que sim com pena, me dá um <b>cachorro-quente DE GRAÇA</b> e diz: "Vai por mim, volta pro hotel." Pego o lanche. (A dignidade não.)','var(--green)'); }
+        else say('Sérgio: "Já te dei um, parceiro. Agora é por minha conta NÃO te dar mais." Ele tem razão.'); }
+      else if(curVerb==='usar') say('Mexer no carrinho dele sem permissão? Não. Já estou representando mal o Brasil o bastante hoje.');
+      else if(curVerb==='andar') walkTo(62);
+      else say('...');
       break;
-
     case 'turista':
-      if(curVerb==='olhar') say('Uma turista com boné "I ♥ DC" e uma câmera caríssima pendurada. Ela me filma achando que sou alguma "local attraction".', P.white);
-      else if(curVerb==='falar') say('Eu: "Você quer foto comigo? Sou quase convidado oficial." Ela sorri educada e tira foto do prédio ATRÁS de mim. Eu saio na foto sem querer, de costas.', P.white);
-      else if(curVerb==='pegar') say('Roubar a câmera dela? Eu vim tirar UMA selfie, não pegar 15 anos de prisão federal.', P.white);
-      else if(curVerb==='andar'){ walkTo(92); }
-      else say('Ela finge que não entende português. Justo.', P.white);
+      if(curVerb==='olhar') say('Uma turista com boné "I ♥ DC" e uma câmera caríssima. Ela me filma achando que sou alguma "local attraction".');
+      else if(curVerb==='falar') say('Eu: "Quer foto comigo? Sou quase convidado oficial." Ela sorri educada e fotografa o prédio <b>atrás</b> de mim. Eu saio na foto sem querer, de costas.');
+      else if(curVerb==='pegar') say('Roubar a câmera dela? Vim tirar UMA selfie, não pegar 15 anos de prisão federal.');
+      else if(curVerb==='andar') walkTo(92);
+      else say('Ela finge que não entende português. Justo.');
       break;
-
     case 'lixo':
-      if(curVerb==='olhar') say('Uma lata de lixo oficial. Brilhando algo plastificado lá dentro. Pode ser útil. Pode ser nojento. Geralmente é os dois.', P.white);
-      else if(curVerb==='pegar'){
-        if(!game.flags.gotBadge){
-          game.flags.gotBadge = true;
-          addItem('cracha');
-          say('Enfio a mão na lata (a turista filma tudo) e puxo um CRACHÁ "VISITOR" plastificado. Tá meio grudento. Diz "STENOGRAPHER - FLAVIA". Praticamente meu. Guardo no bolso da gravata.', P.green2);
-        } else {
-          say('Já peguei o crachá. Não vou catar mais coisa no lixo na frente de turista. Tem limite. (Pouco, mas tem.)', P.white);
-        }
-      }
-      else if(curVerb==='usar') say('Eu fico encarando a lata de lixo. A lata de lixo me encara de volta. Empate.', P.white);
-      else if(curVerb==='andar'){ walkTo(80); }
-      else say('É uma lata de lixo, Flávio.', P.white);
+      if(curVerb==='olhar') say('Lata de lixo oficial. Algo plastificado brilha lá dentro. Pode ser útil. Pode ser nojento. Geralmente é os dois.');
+      else if(curVerb==='pegar'){ if(!game.flags.gotBadge){ game.flags.gotBadge=true; addItem('cracha');
+          say('Enfio a mão na lata (a turista filma tudo) e puxo um <b>CRACHÁ "VISITOR"</b> plastificado, meio grudento. Diz "STENOGRAPHER — FLAVIA". Praticamente meu. Guardo no bolso da gravata.','var(--green)'); }
+        else say('Já peguei o crachá. Não vou catar mais coisa no lixo na frente de turista. Tem limite. (Pouco, mas tem.)'); }
+      else if(curVerb==='usar') say('Fico encarando a lata de lixo. A lata de lixo me encara de volta. Empate.');
+      else if(curVerb==='andar') walkTo(80);
+      else say('É uma lata de lixo, Flávio.');
       break;
-
     case 'arbusto':
-      if(curVerb==='olhar'){
-        if(game.flags.squirrel) say('Um esquilo gordo destruindo meu cachorro-quente dentro do arbusto. Ele tem mais credencial pra entrar ali do que eu.', P.white);
-        else say('Um arbusto ornamental impecável. Farfalha. Deve ter bicho. Tudo aqui tem mais propósito do que eu neste momento.', P.white);
-      }
-      else if(curVerb==='pegar') say('Eu cutuco o arbusto. Algo cutuca de volta. Eu recuo. Mantenho a dignidade recuando devagar.', P.white);
-      else if(curVerb==='usar') say('Pra usar algo no arbusto eu preciso escolher um item primeiro. (Clica no item, depois no arbusto.)', P.ltgray);
-      else if(curVerb==='andar'){ walkTo(250); }
-      else say('O arbusto não responde. Como todo mundo aqui.', P.white);
+      if(curVerb==='olhar'){ if(game.flags.squirrel) say('Um esquilo gordo destruindo meu cachorro-quente. Ele tem mais credencial pra entrar ali do que eu.');
+        else say('Arbusto ornamental impecável. Farfalha — deve ter bicho. Tudo aqui tem mais propósito do que eu neste momento.'); }
+      else if(curVerb==='pegar') say('Cutuco o arbusto. Algo cutuca de volta. Recuo devagar, mantendo a dignidade.');
+      else if(curVerb==='usar') say('Pra usar algo no arbusto, escolha um item primeiro.','var(--muted)');
+      else if(curVerb==='andar') walkTo(250);
+      else say('O arbusto não responde. Como todo mundo aqui.');
       break;
   }
 }
 
-// Clicou num item do inventário
-function clickInvItem(id){
-  if(curVerb==='usar' || curVerb==='dar'){
-    usingItem = id;
-    say((curVerb==='dar'?'Dar ':'Usar ')+ITEMS[id].name+' com... (clique no alvo)', P.gold);
-    clickSnd();
-  } else {
-    // qualquer outro verbo no item = olhar
-    say(ITEMS[id].desc, P.ltgray);
-    blip();
-  }
-}
-
-// Andar do Flávio
-function walkTo(x){
-  game.flavioTargetX = Math.max(20, Math.min(260, x));
-  game.facing = game.flavioTargetX < game.flavioX ? -1 : 1;
-  game.walking = true;
-}
-
 /* =========================================================================
-   SEQUÊNCIA DE VITÓRIA
+   DESENHO DA CENA (pixel-art)
    ========================================================================= */
-let winStep = 0, winTimer = 0;
-function winSequence(){
-  state = STATE.WIN; winStep = 0; winTimer = 0; game.flags.won = true;
-}
-
-/* =========================================================================
-   DESENHO DAS CENAS
-   ========================================================================= */
-function cloud(x,y,w){
-  // nuvem chapada com base sombreada — desenhada no ctx atual
-  ctx.fillStyle=P.cloudSh;
-  ctx.fillRect(x,y+3,w,4); ctx.fillRect(x+w*0.2,y+5,w*0.6,3);
-  ctx.fillStyle=P.cloud;
-  ctx.fillRect(x+3,y,w-8,4); ctx.fillRect(x,y+2,w,3);
-  ctx.fillRect(x+w*0.25,y-2,w*0.45,3);
-}
-
-function ditherSky(){
-  // gradiente do azul profundo ao horizonte com névoa quente (dithering Bayer)
-  ditherGrad(ctx, 0,0, SCREEN_W,40, P.skyTop, P.skyMid);
-  ditherGrad(ctx, 0,40, SCREEN_W,30, P.skyMid, P.skyLow);
-  ditherGrad(ctx, 0,62, SCREEN_W,14, P.skyLow, P.skyHaze);
-  cloud(36,14,30); cloud(150,8,46); cloud(248,20,36); cloud(96,26,22);
-}
-
+function cloud(x,y,w){ ctx.fillStyle=P.cloudSh; ctx.fillRect(x,y+3,w,4); ctx.fillRect(x+w*0.2,y+5,w*0.6,3);
+  ctx.fillStyle=P.cloud; ctx.fillRect(x+3,y,w-8,4); ctx.fillRect(x,y+2,w,3); ctx.fillRect(x+w*0.25,y-2,w*0.45,3); }
+function ditherSky(){ ditherGrad(ctx,0,0,SCREEN_W,40,P.skyTop,P.skyMid); ditherGrad(ctx,0,40,SCREEN_W,30,P.skyMid,P.skyLow);
+  ditherGrad(ctx,0,62,SCREEN_W,14,P.skyLow,P.skyHaze); cloud(36,14,30); cloud(150,8,46); cloud(248,20,36); cloud(96,26,22); }
 function drawWhiteHouse(){
   ditherSky();
-
-  // ---- Gramado com luz/sombra e perspectiva ----
-  ditherGrad(ctx, 0,70, SCREEN_W,50, P.grassHi, P.grass);
-  ditherGrad(ctx, 0,108, SCREEN_W,12, P.grass, P.grassDk);
-  // tufos/textura
-  ctx.fillStyle=P.grassSh;
-  for(let y=78;y<116;y+=5) for(let x=((y*5)%11);x<SCREEN_W;x+=11) ctx.fillRect(x,y,2,1);
-  ctx.fillStyle=P.grassHi;
-  for(let y=80;y<114;y+=7) for(let x=((y*3)%13)+4;x<SCREEN_W;x+=13) ctx.fillRect(x,y,1,1);
-
-  // ---- Calçada (perspectiva: juntas em leque a partir do centro) ----
-  ditherGrad(ctx, 0,120, SCREEN_W,30, P.pathHi, P.path);
-  ctx.fillStyle=P.pathSh;
-  for(let i=-7;i<=7;i++){
-    const top = 160 + i*9;             // juntas próximas no topo
-    const bot = 160 + i*26;            // se abrem embaixo (perto do jogador)
-    for(let y=0;y<30;y++){ const x = Math.round(top + (bot-top)*(y/30)); ctx.fillRect(x,120+y,1,1); }
-  }
-  ctx.fillStyle=P.pathDk; ctx.fillRect(0,120,SCREEN_W,1);
-  ctx.fillStyle=P.pathHi; ctx.fillRect(0,121,SCREEN_W,1);
-
-  // ---- Casa Branca ----
-  const hx=120, hw=170, hy=18;
-  // corpo (luz quente em cima, sombra fria embaixo)
-  ditherGrad(ctx, hx,hy, hw,30, P.white, P.wwhite);
-  ctx.fillStyle=P.whiteHi; ctx.fillRect(hx,hy,hw,3);
-  ctx.fillStyle=P.whiteSh; ctx.fillRect(hx,hy+27,hw,3);     // base na sombra
-  ctx.fillStyle=P.cool;    ctx.fillRect(hx,hy+30,hw,2);     // sombra projetada no chão
-  // colunas com volume (luz à esquerda, sombra à direita)
-  for(let i=0;i<8;i++){ const cx=150+i*15;
-    ctx.fillStyle=P.whiteSh; ctx.fillRect(cx,24,5,22);
-    ctx.fillStyle=P.white;   ctx.fillRect(cx,24,3,22);
-    ctx.fillStyle=P.whiteHi; ctx.fillRect(cx,24,1,22);
-    ctx.fillStyle=P.shadow;  ctx.fillRect(cx,24,5,1); ctx.fillRect(cx,45,5,1); // capitel/base
-  }
-  // entablamento + frontão triangular sombreado
-  ctx.fillStyle=P.whiteHi; ctx.fillRect(140,14,130,3);
-  ctx.fillStyle=P.shadow;  ctx.fillRect(140,17,130,2);
-  ctx.fillStyle=P.wwhite; ctx.beginPath();
-  ctx.moveTo(165,14); ctx.lineTo(245,14); ctx.lineTo(205,4); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=P.whiteHi; ctx.beginPath(); // face iluminada do frontão
-  ctx.moveTo(205,4); ctx.lineTo(245,14); ctx.lineTo(225,14); ctx.closePath(); ctx.fill();
-  // mastro + bandeira tremulando
-  const fl = Math.floor(Date.now()/300)%2;
+  ditherGrad(ctx,0,70,SCREEN_W,50,P.grassHi,P.grass); ditherGrad(ctx,0,108,SCREEN_W,12,P.grass,P.grassDk);
+  ctx.fillStyle=P.grassSh; for(let y=78;y<116;y+=5) for(let x=((y*5)%11);x<SCREEN_W;x+=11) ctx.fillRect(x,y,2,1);
+  ctx.fillStyle=P.grassHi; for(let y=80;y<114;y+=7) for(let x=((y*3)%13)+4;x<SCREEN_W;x+=13) ctx.fillRect(x,y,1,1);
+  ditherGrad(ctx,0,120,SCREEN_W,30,P.pathHi,P.path);
+  ctx.fillStyle=P.pathSh; for(let i=-7;i<=7;i++){ const top=160+i*9, bot=160+i*26;
+    for(let y=0;y<30;y++){ const x=Math.round(top+(bot-top)*(y/30)); ctx.fillRect(x,120+y,1,1); } }
+  ctx.fillStyle=P.pathDk; ctx.fillRect(0,120,SCREEN_W,1); ctx.fillStyle=P.pathHi; ctx.fillRect(0,121,SCREEN_W,1);
+  const hx=120,hw=170,hy=18;
+  ditherGrad(ctx,hx,hy,hw,30,P.white,P.wwhite);
+  ctx.fillStyle=P.whiteHi; ctx.fillRect(hx,hy,hw,3); ctx.fillStyle=P.whiteSh; ctx.fillRect(hx,hy+27,hw,3);
+  ctx.fillStyle=P.cool; ctx.fillRect(hx,hy+30,hw,2);
+  for(let i=0;i<8;i++){ const cx=150+i*15; ctx.fillStyle=P.whiteSh; ctx.fillRect(cx,24,5,22);
+    ctx.fillStyle=P.white; ctx.fillRect(cx,24,3,22); ctx.fillStyle=P.whiteHi; ctx.fillRect(cx,24,1,22);
+    ctx.fillStyle=P.shadow; ctx.fillRect(cx,24,5,1); ctx.fillRect(cx,45,5,1); }
+  ctx.fillStyle=P.whiteHi; ctx.fillRect(140,14,130,3); ctx.fillStyle=P.shadow; ctx.fillRect(140,17,130,2);
+  ctx.fillStyle=P.wwhite; ctx.beginPath(); ctx.moveTo(165,14); ctx.lineTo(245,14); ctx.lineTo(205,4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=P.whiteHi; ctx.beginPath(); ctx.moveTo(205,4); ctx.lineTo(245,14); ctx.lineTo(225,14); ctx.closePath(); ctx.fill();
   ctx.fillStyle=P.gray; ctx.fillRect(204,-2,1,8);
-  ctx.fillStyle=P.red;  ctx.fillRect(205,-2,9,2); ctx.fillRect(205+fl,0,9,2); ctx.fillRect(205,2,9,2);
-  ctx.fillStyle=P.white2; ctx.fillRect(205,0,9,1);
-  ctx.fillStyle=P.blue; ctx.fillRect(205,-2,4,3);
-  // janelas com peitoril e brilho
-  for(let i=0;i<6;i++){ const wx=128+i*26;
-    ctx.fillStyle=P.cool;   ctx.fillRect(wx-1,29,10,12);
-    ctx.fillStyle=P.blue;   ctx.fillRect(wx,30,8,10);
-    ctx.fillStyle=P.blueLt; ctx.fillRect(wx+1,31,3,4);  // reflexo
-    ctx.fillStyle=P.whiteHi;ctx.fillRect(wx-1,40,10,1); // peitoril
-  }
-
-  // ---- Cerca de ferro com volume ----
-  ctx.fillStyle=P.black;  ctx.fillRect(0,116,SCREEN_W,4);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(0,116,SCREEN_W,1);
-  for(let x=4;x<SCREEN_W;x+=10){
-    ctx.fillStyle=P.black;  ctx.fillRect(x,96,2,24);
-    ctx.fillStyle=P.metalDk;ctx.fillRect(x,96,1,24);   // brilho de metal
-    ctx.fillStyle=P.gold;   ctx.fillRect(x,94,2,2);    // ponta dourada
-    ctx.fillStyle=P.goldDk; ctx.fillRect(x,95,2,1);
-  }
-
+  for(let i=0;i<6;i++){ const wx=128+i*26; ctx.fillStyle=P.cool; ctx.fillRect(wx-1,29,10,12);
+    ctx.fillStyle=P.blue; ctx.fillRect(wx,30,8,10); ctx.fillStyle=P.blueLt; ctx.fillRect(wx+1,31,3,4);
+    ctx.fillStyle=P.whiteHi; ctx.fillRect(wx-1,40,10,1); }
+  ctx.fillStyle=P.black; ctx.fillRect(0,116,SCREEN_W,4); ctx.fillStyle=P.dkgray; ctx.fillRect(0,116,SCREEN_W,1);
+  for(let x=4;x<SCREEN_W;x+=10){ ctx.fillStyle=P.black; ctx.fillRect(x,96,2,24); ctx.fillStyle=P.metalDk; ctx.fillRect(x,96,1,24);
+    ctx.fillStyle=P.gold; ctx.fillRect(x,94,2,2); ctx.fillStyle=P.goldDk; ctx.fillRect(x,95,2,1); }
   drawGate(196,90);
 }
-
-function drawGate(x,y){
-  ctx.fillStyle=P.black;
-  ctx.fillRect(x,y,4,40); ctx.fillRect(x+56,y,4,40);
-  ctx.fillRect(x,y,60,4);
-  ctx.fillStyle=P.metalDk;                                  // brilho nos montantes
-  ctx.fillRect(x,y,1,40); ctx.fillRect(x+56,y,1,40);
-  for(let i=1;i<6;i++){ ctx.fillStyle=P.black; ctx.fillRect(x+i*9,y,2,40);
-    ctx.fillStyle=P.metalDk; ctx.fillRect(x+i*9,y,1,40); }
-  // águia dourada com sombra
-  ctx.fillStyle=P.goldDk; ctx.fillRect(x+25,y+15,10,3);
-  ctx.fillStyle=P.gold;
-  ctx.fillRect(x+26,y+14,8,3); ctx.fillRect(x+28,y+11,4,3);
-  ctx.fillRect(x+24,y+15,2,2); ctx.fillRect(x+34,y+15,2,2);
-  ctx.fillStyle=P.goldDk; ctx.fillRect(x+29,y+12,2,1);
+function drawGate(x,y){ ctx.fillStyle=P.black; ctx.fillRect(x,y,4,40); ctx.fillRect(x+56,y,4,40); ctx.fillRect(x,y,60,4);
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,1,40); ctx.fillRect(x+56,y,1,40);
+  for(let i=1;i<6;i++){ ctx.fillStyle=P.black; ctx.fillRect(x+i*9,y,2,40); ctx.fillStyle=P.metalDk; ctx.fillRect(x+i*9,y,1,40); }
+  ctx.fillStyle=P.goldDk; ctx.fillRect(x+25,y+15,10,3); ctx.fillStyle=P.gold;
+  ctx.fillRect(x+26,y+14,8,3); ctx.fillRect(x+28,y+11,4,3); ctx.fillRect(x+24,y+15,2,2); ctx.fillRect(x+34,y+15,2,2);
 }
+function buildBackground(){ const real=ctx; ctx=bgctx; drawWhiteHouse(); ctx=real; bgBuilt=true; }
+function drawBackdrop(){ if(!bgBuilt) buildBackground(); ctx.drawImage(bgCanvas,0,0);
+  const fl=Math.floor(Date.now()/300)%2; ctx.fillStyle=P.skyMid; ctx.fillRect(205,-2,11,7);
+  ctx.fillStyle=P.gray; ctx.fillRect(204,-2,1,8); ctx.fillStyle=P.red; ctx.fillRect(205,-2,9,2); ctx.fillRect(205+fl,0,9,2); ctx.fillRect(205,2,9,2);
+  ctx.fillStyle=P.blue; ctx.fillRect(205,-2,4,3); }
 
-/* Constrói (uma vez) o fundo estático no bgCanvas. */
-function buildBackground(){
-  const real = ctx;
-  ctx = bgctx;
-  drawWhiteHouse();          // céu + gramado + casa + cerca + portão
-  ctx = real;
-  bgBuilt = true;
-}
-function drawBackdrop(){
-  if(!bgBuilt) buildBackground();
-  ctx.drawImage(bgCanvas, 0, 0);
-  // bandeira é o único detalhe animado do fundo — redesenha por cima
-  const fl = Math.floor(Date.now()/300)%2;
-  ctx.fillStyle=P.skyMid; ctx.fillRect(205,-2,11,7);
-  ctx.fillStyle=P.gray; ctx.fillRect(204,-2,1,8);
-  ctx.fillStyle=P.red;  ctx.fillRect(205,-2,9,2); ctx.fillRect(205+fl,0,9,2); ctx.fillRect(205,2,9,2);
-  ctx.fillStyle=P.blue; ctx.fillRect(205,-2,4,3);
-}
+function shadow(cx,cy,w){ ctx.fillStyle='rgba(10,12,8,0.28)'; ctx.beginPath(); ctx.ellipse(cx,cy,w,Math.max(2,w*0.34),0,0,7); ctx.fill(); }
 
-// sombra projetada elíptica no chão (semi-transparente)
-function shadow(cx, cy, w){
-  ctx.fillStyle='rgba(10,12,8,0.28)';
-  ctx.beginPath(); ctx.ellipse(cx, cy, w, Math.max(2,w*0.34), 0, 0, 7); ctx.fill();
+function drawTrash(x,y){ shadow(x+7,y+22,9);
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,14,22); ctx.fillStyle=P.metal; ctx.fillRect(x+1,y+2,9,18);
+  ctx.fillStyle=P.metalHi; ctx.fillRect(x+1,y+2,2,18); ctx.fillStyle=P.metalDk; ctx.fillRect(x+10,y+2,3,18);
+  for(let yy=y+4;yy<y+20;yy+=4){ ctx.fillStyle=P.metalDk; ctx.fillRect(x+1,yy,11,1); }
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x-1,y-2,16,3); ctx.fillStyle=P.metalHi; ctx.fillRect(x-1,y-2,16,1);
+  ctx.fillStyle=P.black; ctx.fillRect(x+3,y+1,8,2);
+  if(!game.flags.gotBadge){ const g=Math.floor(Date.now()/250)%2; ctx.fillStyle=g?P.gold:P.goldDk; ctx.fillRect(x+5,y-1,4,3); ctx.fillStyle=P.white2; ctx.fillRect(x+6,y-1,1,1); }
 }
-
-function drawTrash(x,y){
-  shadow(x+7, y+22, 9);
-  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,14,22);
-  ctx.fillStyle=P.metal;   ctx.fillRect(x+1,y+2,9,18);   // face iluminada
-  ctx.fillStyle=P.metalHi; ctx.fillRect(x+1,y+2,2,18);
-  ctx.fillStyle=P.metalDk; ctx.fillRect(x+10,y+2,3,18);  // lado na sombra
-  for(let yy=y+4; yy<y+20; yy+=4){ ctx.fillStyle=P.metalDk; ctx.fillRect(x+1,yy,11,1); } // ranhuras
-  ctx.fillStyle=P.metalDk; ctx.fillRect(x-1,y-2,16,3);   // aba/tampa
-  ctx.fillStyle=P.metalHi; ctx.fillRect(x-1,y-2,16,1);
-  ctx.fillStyle=P.black;   ctx.fillRect(x+3,y+1,8,2);
-  if(!game.flags.gotBadge){ // crachá brilhando saindo da lata
-    const g = Math.floor(Date.now()/250)%2;
-    ctx.fillStyle=g?P.gold:P.goldDk; ctx.fillRect(x+5,y-1,4,3);
-    ctx.fillStyle=P.white2; ctx.fillRect(x+6,y-1,1,1);
-  }
-}
-
-function drawCart(x,y){
-  shadow(x+20, y+26, 20);
-  // guarda-sol listrado com volume
+function drawCart(x,y){ shadow(x+20,y+26,20);
   ctx.fillStyle=P.redDk; ctx.fillRect(x-3,y-18,46,4);
-  ctx.fillStyle=P.red;   for(let i=0;i<6;i++) ctx.fillRect(x-2+i*8,y-18,4,3);
-  ctx.fillStyle=P.white2;for(let i=0;i<5;i++) ctx.fillRect(x+2+i*8,y-18,4,3);
-  ctx.fillStyle=P.gold;  ctx.fillRect(x+18,y-18,3,2);
-  ctx.fillStyle=P.metalDk; ctx.fillRect(x+19,y-15,2,15);
-  // corpo do carrinho
-  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,40,22);
-  ctx.fillStyle=P.metal;   ctx.fillRect(x+1,y+1,38,16);
-  ctx.fillStyle=P.metalHi; ctx.fillRect(x+1,y+1,38,2);
-  ctx.fillStyle=P.red;     ctx.fillRect(x+2,y+5,36,4);
-  ctx.fillStyle=P.redDk;   ctx.fillRect(x+2,y+8,36,1);
-  // rodas com cubo
+  ctx.fillStyle=P.red; for(let i=0;i<6;i++) ctx.fillRect(x-2+i*8,y-18,4,3);
+  ctx.fillStyle=P.white2; for(let i=0;i<5;i++) ctx.fillRect(x+2+i*8,y-18,4,3);
+  ctx.fillStyle=P.gold; ctx.fillRect(x+18,y-18,3,2); ctx.fillStyle=P.metalDk; ctx.fillRect(x+19,y-15,2,15);
+  ctx.fillStyle=P.metalDk; ctx.fillRect(x,y,40,22); ctx.fillStyle=P.metal; ctx.fillRect(x+1,y+1,38,16);
+  ctx.fillStyle=P.metalHi; ctx.fillRect(x+1,y+1,38,2); ctx.fillStyle=P.red; ctx.fillRect(x+2,y+5,36,4); ctx.fillStyle=P.redDk; ctx.fillRect(x+2,y+8,36,1);
   ctx.fillStyle=P.black; ctx.beginPath(); ctx.arc(x+8,y+23,4,0,7); ctx.arc(x+32,y+23,4,0,7); ctx.fill();
   ctx.fillStyle=P.metalDk; ctx.fillRect(x+7,y+22,2,2); ctx.fillRect(x+31,y+22,2,2);
-  // letreiro
-  txt('HOT DOG', x+4, y+11, P.white2, 1);
-  // Sérgio (rosto sombreado + toca)
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+16,y-10,8,8);
-  ctx.fillStyle=P.skin;   ctx.fillRect(x+16,y-10,5,8);
-  ctx.fillStyle=P.white2; ctx.fillRect(x+15,y-13,10,4);
-  ctx.fillStyle=P.shadow; ctx.fillRect(x+15,y-10,10,1);
-  ctx.fillStyle=P.black;  ctx.fillRect(x+18,y-7,1,1); ctx.fillRect(x+21,y-7,1,1);
-  ctx.fillStyle=P.hair;   ctx.fillRect(x+18,y-4,5,1); // bigode
+  // plaquinha com um cachorro-quente desenhado (em vez de texto ilegível)
+  ctx.fillStyle=P.gold;   ctx.fillRect(x+12,y+10,16,6);
+  ctx.fillStyle=P.brownHi;ctx.fillRect(x+14,y+11,12,4);
+  ctx.fillStyle=P.red;    ctx.fillRect(x+15,y+12,10,2);
+  ctx.fillStyle=P.white2; ctx.fillRect(x+16,y+11,8,1);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+16,y-10,8,8); ctx.fillStyle=P.skin; ctx.fillRect(x+16,y-10,5,8);
+  ctx.fillStyle=P.white2; ctx.fillRect(x+15,y-13,10,4); ctx.fillStyle=P.shadow; ctx.fillRect(x+15,y-10,10,1);
+  ctx.fillStyle=P.black; ctx.fillRect(x+18,y-7,1,1); ctx.fillRect(x+21,y-7,1,1); ctx.fillStyle=P.hair; ctx.fillRect(x+18,y-4,5,1);
 }
-
-function drawTourist(x,y){
-  shadow(x+5, y+44, 9);
-  // boné com aba
-  ctx.fillStyle=P.redDk; ctx.fillRect(x,y,12,4); ctx.fillRect(x+10,y+3,6,2);
-  ctx.fillStyle=P.red;   ctx.fillRect(x+1,y,10,3);
-  // cabeça sombreada
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y+4,10,8);
-  ctx.fillStyle=P.skin;   ctx.fillRect(x+1,y+4,7,8);
-  ctx.fillStyle=P.black;  ctx.fillRect(x+3,y+7,2,2); ctx.fillRect(x+7,y+7,2,2);
-  // camiseta turística
-  ctx.fillStyle=P.blue;   ctx.fillRect(x-1,y+12,14,18);
-  ctx.fillStyle=P.blueLt; ctx.fillRect(x-1,y+12,4,18);  // luz na lateral
-  ctx.fillStyle=P.white2; ctx.fillRect(x+4,y+15,3,2);   // estampa
-  // câmera no peito
-  ctx.fillStyle=P.black;  ctx.fillRect(x+3,y+18,7,5);
-  ctx.fillStyle=P.metalHi;ctx.fillRect(x+5,y+19,3,3);
-  ctx.fillStyle=P.cool;   ctx.fillRect(x+6,y+20,1,1);
-  // pernas (bermuda + perna)
-  ctx.fillStyle=P.path;   ctx.fillRect(x-1,y+30,5,5); ctx.fillRect(x+7,y+30,5,5);
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y+35,4,9); ctx.fillRect(x+7,y+35,4,9);
+function drawTourist(x,y){ shadow(x+5,y+44,9);
+  ctx.fillStyle=P.redDk; ctx.fillRect(x,y,12,4); ctx.fillRect(x+10,y+3,6,2); ctx.fillStyle=P.red; ctx.fillRect(x+1,y,10,3);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y+4,10,8); ctx.fillStyle=P.skin; ctx.fillRect(x+1,y+4,7,8);
+  ctx.fillStyle=P.black; ctx.fillRect(x+3,y+7,2,2); ctx.fillRect(x+7,y+7,2,2);
+  ctx.fillStyle=P.blue; ctx.fillRect(x-1,y+12,14,18); ctx.fillStyle=P.blueLt; ctx.fillRect(x-1,y+12,4,18); ctx.fillStyle=P.white2; ctx.fillRect(x+4,y+15,3,2);
+  ctx.fillStyle=P.black; ctx.fillRect(x+3,y+18,7,5); ctx.fillStyle=P.metalHi; ctx.fillRect(x+5,y+19,3,3); ctx.fillStyle=P.cool; ctx.fillRect(x+6,y+20,1,1);
+  ctx.fillStyle=P.path; ctx.fillRect(x-1,y+30,5,5); ctx.fillRect(x+7,y+30,5,5); ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y+35,4,9); ctx.fillRect(x+7,y+35,4,9);
 }
-
-function drawGuard(x,y){
-  const f = game.flags;
-  if(f.guardDistracted){ drawTinyGuardRunning(245,108); return; }
-  shadow(x+13, y+66, 14);
-  // chapéu / cabeça
-  ctx.fillStyle=P.black;  ctx.fillRect(x+4,y,18,4);     // aba do chapéu
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x+5,y,17,1);
-  ctx.fillStyle=P.black;  ctx.fillRect(x+6,y-5,14,6);
-  ctx.fillStyle=P.skinSh; ctx.fillRect(x+7,y+4,12,8);   // rosto na sombra do chapéu
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+7,y+4,7,8);
-  ctx.fillStyle=P.black;  ctx.fillRect(x+8,y+6,10,3);   // óculos escuros
-  ctx.fillStyle=P.metalHi;ctx.fillRect(x+9,y+7,1,1);
-  ctx.fillStyle=P.skinSh; ctx.fillRect(x+10,y+10,5,1);  // boca séria
-  // terno preto com lapelas e volume
-  ctx.fillStyle=P.black;  ctx.fillRect(x+2,y+12,22,34);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x+3,y+13,3,30);  // luz na lapela esquerda
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x+11,y+12,4,34); // camisa
-  ctx.fillStyle=P.white2; ctx.fillRect(x+12,y+12,2,8);
-  ctx.fillStyle=P.redDk;  ctx.fillRect(x+12,y+13,2,12); // gravata
-  // braços cruzados
-  ctx.fillStyle=P.black;  ctx.fillRect(x,y+20,26,8);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x,y+20,26,1);
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+9,y+21,8,5);
-  ctx.fillStyle=P.skin;   ctx.fillRect(x+9,y+21,4,5);
-  // pernas
-  ctx.fillStyle=P.black;  ctx.fillRect(x+4,y+46,7,20); ctx.fillRect(x+15,y+46,7,20);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x+4,y+46,1,20); ctx.fillRect(x+15,y+46,1,20);
-  ctx.fillStyle=P.black;  ctx.fillRect(x+3,y+64,9,3); ctx.fillRect(x+14,y+64,9,3);
-  ctx.fillStyle=P.metalDk;ctx.fillRect(x+3,y+64,9,1); ctx.fillRect(x+14,y+64,9,1);
-  // fone na orelha (cabinho em espiral)
+function drawGuard(x,y){ if(game.flags.guardDistracted){ drawTinyGuardRunning(245,108); return; } shadow(x+13,y+66,14);
+  ctx.fillStyle=P.black; ctx.fillRect(x+4,y,18,4); ctx.fillStyle=P.dkgray; ctx.fillRect(x+5,y,17,1); ctx.fillStyle=P.black; ctx.fillRect(x+6,y-5,14,6);
+  ctx.fillStyle=P.skinSh; ctx.fillRect(x+7,y+4,12,8); ctx.fillStyle=P.skinDk; ctx.fillRect(x+7,y+4,7,8);
+  ctx.fillStyle=P.black; ctx.fillRect(x+8,y+6,10,3); ctx.fillStyle=P.metalHi; ctx.fillRect(x+9,y+7,1,1); ctx.fillStyle=P.skinSh; ctx.fillRect(x+10,y+10,5,1);
+  ctx.fillStyle=P.black; ctx.fillRect(x+2,y+12,22,34); ctx.fillStyle=P.dkgray; ctx.fillRect(x+3,y+13,3,30); ctx.fillRect(x+11,y+12,4,34);
+  ctx.fillStyle=P.white2; ctx.fillRect(x+12,y+12,2,8); ctx.fillStyle=P.redDk; ctx.fillRect(x+12,y+13,2,12);
+  ctx.fillStyle=P.black; ctx.fillRect(x,y+20,26,8); ctx.fillStyle=P.dkgray; ctx.fillRect(x,y+20,26,1);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+9,y+21,8,5); ctx.fillStyle=P.skin; ctx.fillRect(x+9,y+21,4,5);
+  ctx.fillStyle=P.black; ctx.fillRect(x+4,y+46,7,20); ctx.fillRect(x+15,y+46,7,20); ctx.fillStyle=P.dkgray; ctx.fillRect(x+4,y+46,1,20); ctx.fillRect(x+15,y+46,1,20);
+  ctx.fillStyle=P.black; ctx.fillRect(x+3,y+64,9,3); ctx.fillRect(x+14,y+64,9,3); ctx.fillStyle=P.metalDk; ctx.fillRect(x+3,y+64,9,1); ctx.fillRect(x+14,y+64,9,1);
   ctx.fillStyle=P.ltgray; ctx.fillRect(x+18,y+5,1,6);
 }
-
-function drawTinyGuardRunning(x,y){
-  shadow(x+4, y+20, 7);
-  ctx.fillStyle=P.black; ctx.fillRect(x,y,8,14);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x,y,2,14);
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y-4,6,5);
-  ctx.fillStyle=P.black; ctx.fillRect(x+1,y-7,6,4);
-  const k = Math.floor(Date.now()/120)%2;
-  ctx.fillStyle=P.black;
-  ctx.fillRect(x+(k?0:5),y+14,3,6); ctx.fillRect(x+(k?5:0),y+14,3,6);
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+(k?-2:7),y+4,3,2); // braço estendido
+function drawTinyGuardRunning(x,y){ shadow(x+4,y+20,7); ctx.fillStyle=P.black; ctx.fillRect(x,y,8,14); ctx.fillStyle=P.dkgray; ctx.fillRect(x,y,2,14);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+1,y-4,6,5); ctx.fillStyle=P.black; ctx.fillRect(x+1,y-7,6,4);
+  const k=Math.floor(Date.now()/120)%2; ctx.fillStyle=P.black; ctx.fillRect(x+(k?0:5),y+14,3,6); ctx.fillRect(x+(k?5:0),y+14,3,6);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+(k?-2:7),y+4,3,2);
 }
-
-function drawSquirrel(x,y){
-  const k = Math.floor(Date.now()/150)%2;
-  shadow(x+4, y+6, 6);
-  ctx.fillStyle=P.brownDk; ctx.fillRect(x,y,9,6);          // corpo (sombra)
-  ctx.fillStyle=P.brown;   ctx.fillRect(x,y,9,4);
-  ctx.fillStyle=P.brownHi; ctx.fillRect(x+1,y,7,1);        // luz nas costas
-  ctx.fillStyle=P.brown;   ctx.fillRect(x+7,y-1,4,4);      // cabeça
-  ctx.fillStyle=P.brownHi; ctx.fillRect(x+8,y-1,2,1);
-  ctx.fillStyle=P.brownDk; ctx.fillRect(x-4,y-7+(k?0:1),5,10); // cauda
-  ctx.fillStyle=P.brown;   ctx.fillRect(x-3,y-6+(k?0:1),3,7);
-  ctx.fillStyle=P.black;   ctx.fillRect(x+9,y,1,1);        // olho
+function drawSquirrel(x,y){ const k=Math.floor(Date.now()/150)%2; shadow(x+4,y+6,6);
+  ctx.fillStyle=P.brownDk; ctx.fillRect(x,y,9,6); ctx.fillStyle=P.brown; ctx.fillRect(x,y,9,4); ctx.fillStyle=P.brownHi; ctx.fillRect(x+1,y,7,1);
+  ctx.fillStyle=P.brown; ctx.fillRect(x+7,y-1,4,4); ctx.fillStyle=P.brownHi; ctx.fillRect(x+8,y-1,2,1);
+  ctx.fillStyle=P.brownDk; ctx.fillRect(x-4,y-7+(k?0:1),5,10); ctx.fillStyle=P.brown; ctx.fillRect(x-3,y-6+(k?0:1),3,7);
+  ctx.fillStyle=P.black; ctx.fillRect(x+9,y,1,1);
   if(game.flags.guardDistracted){ ctx.fillStyle=P.gold; ctx.fillRect(x+2,y+1,3,3); ctx.fillStyle=P.white2; ctx.fillRect(x+2,y+1,1,1); }
 }
-
-function drawBush(x,y){
-  shadow(x+15, y+30, 22);
-  // massa de folhas com 3 tons (luz no topo-esq, sombra embaixo-dir)
-  ctx.fillStyle=P.grassSh;
-  ctx.beginPath(); ctx.arc(x,y+18,16,0,7); ctx.arc(x+16,y+17,15,0,7); ctx.arc(x+30,y+18,15,0,7); ctx.fill();
-  ctx.fillStyle=P.grassDk;
-  ctx.beginPath(); ctx.arc(x-1,y+15,13,0,7); ctx.arc(x+15,y+13,13,0,7); ctx.arc(x+29,y+15,13,0,7); ctx.fill();
-  ctx.fillStyle=P.grass;
-  for(let i=0;i<40;i++){ const px=x-12+((i*7)%44), py=y+3+((i*11)%18); ctx.fillRect(px,py,2,2); }
-  ctx.fillStyle=P.grassHi;
-  for(let i=0;i<18;i++){ const px=x-8+((i*9)%36), py=y+3+((i*7)%10); ctx.fillRect(px,py,1,1); }
+function drawBush(x,y){ shadow(x+15,y+30,22);
+  ctx.fillStyle=P.grassSh; ctx.beginPath(); ctx.arc(x,y+18,16,0,7); ctx.arc(x+16,y+17,15,0,7); ctx.arc(x+30,y+18,15,0,7); ctx.fill();
+  ctx.fillStyle=P.grassDk; ctx.beginPath(); ctx.arc(x-1,y+15,13,0,7); ctx.arc(x+15,y+13,13,0,7); ctx.arc(x+29,y+15,13,0,7); ctx.fill();
+  ctx.fillStyle=P.grass; for(let i=0;i<40;i++){ const px=x-12+((i*7)%44), py=y+3+((i*11)%18); ctx.fillRect(px,py,2,2); }
+  ctx.fillStyle=P.grassHi; for(let i=0;i<18;i++){ const px=x-8+((i*9)%36), py=y+3+((i*7)%10); ctx.fillRect(px,py,1,1); }
+}
+function drawFlavio(x,y,opt){ opt=opt||{}; const bob=game.walking?Math.floor(game.bob)%2:0; y+=bob; shadow(x+8,y+48,11);
+  ctx.fillStyle=P.hair; ctx.fillRect(x+3,y,10,4); ctx.fillRect(x+2,y+2,12,3); ctx.fillStyle=P.hairHi; ctx.fillRect(x+3,y,7,1);
+  ctx.fillStyle=P.skinDk; ctx.fillRect(x+4,y+4,9,8); ctx.fillStyle=P.skin; ctx.fillRect(x+4,y+4,6,8); ctx.fillStyle=P.skinHi; ctx.fillRect(x+4,y+4,2,3);
+  ctx.fillStyle=P.black; ctx.fillRect(x+5,y+6,2,2); ctx.fillRect(x+10,y+6,2,2); ctx.fillStyle=P.skinSh; ctx.fillRect(x+8,y+8,2,2);
+  ctx.fillStyle=P.redDk; ctx.fillRect(x+6,y+10,5,1); ctx.fillStyle=P.blueLt; ctx.fillRect(x+12,y+3,2,3);
+  ctx.fillStyle=P.black; ctx.fillRect(x,y+12,17,22); ctx.fillStyle=P.dkgray; ctx.fillRect(x+1,y+12,15,22); ctx.fillStyle=P.gray; ctx.fillRect(x+1,y+12,2,20);
+  ctx.fillStyle=P.white2; ctx.fillRect(x+7,y+12,3,18); ctx.fillStyle=P.red; ctx.fillRect(x+8,y+13,1,14); ctx.fillStyle=P.redDk; ctx.fillRect(x+8,y+24,1,3);
+  if(opt.selfie){ ctx.fillStyle=P.dkgray; ctx.fillRect(x-2,y+8,5,8); ctx.fillStyle=P.skin; ctx.fillRect(x-2,y+6,4,3);
+    ctx.fillStyle=P.black; ctx.fillRect(x-5,y+3,6,5); ctx.fillStyle=P.blueLt; ctx.fillRect(x-4,y+4,4,3); ctx.fillStyle=P.white2; ctx.fillRect(x-4,y+4,1,1);
+  } else { ctx.fillStyle=P.dkgray; ctx.fillRect(x-1,y+14,3,14); ctx.fillRect(x+15,y+14,3,14); ctx.fillStyle=P.skinDk; ctx.fillRect(x-1,y+27,3,3); ctx.fillRect(x+15,y+27,3,3); }
+  const k=game.walking?Math.floor(game.bob)%2:0; ctx.fillStyle=P.black; ctx.fillRect(x+3+(k?1:0),y+34,5,12); ctx.fillRect(x+10-(k?1:0),y+34,5,12);
+  ctx.fillStyle=P.dkgray; ctx.fillRect(x+3+(k?1:0),y+34,1,12); ctx.fillStyle=P.ltgray; ctx.fillRect(x+3,y+44,5,2); ctx.fillRect(x+10,y+44,5,2);
+  ctx.fillStyle=P.brownDk; ctx.fillRect(x+2,y+46,6,3); ctx.fillRect(x+10,y+46,6,3); ctx.fillStyle=P.brown; ctx.fillRect(x+2,y+46,6,1); ctx.fillRect(x+10,y+46,6,1);
 }
 
-function drawFlavio(x,y,opt){
-  opt = opt||{};
-  const bob = game.walking ? Math.floor(game.bob)%2 : 0;
-  y += bob;
-  shadow(x+8, y+48, 11);
-  // cabelo (penteado pra disfarçar a careca)
-  ctx.fillStyle=P.hair;   ctx.fillRect(x+3,y,10,4); ctx.fillRect(x+2,y+2,12,3);
-  ctx.fillStyle=P.hairHi; ctx.fillRect(x+3,y,7,1);
-  // rosto (luz à esquerda, sombra à direita)
-  ctx.fillStyle=P.skinDk; ctx.fillRect(x+4,y+4,9,8);
-  ctx.fillStyle=P.skin;   ctx.fillRect(x+4,y+4,6,8);
-  ctx.fillStyle=P.skinHi; ctx.fillRect(x+4,y+4,2,3);
-  ctx.fillStyle=P.black;  ctx.fillRect(x+5,y+6,2,2); ctx.fillRect(x+10,y+6,2,2); // olhos arregalados
-  ctx.fillStyle=P.skinSh; ctx.fillRect(x+8,y+8,2,2);  // nariz
-  ctx.fillStyle=P.redDk;  ctx.fillRect(x+6,y+10,5,1);  // sorriso nervoso
-  ctx.fillStyle=P.blueLt; ctx.fillRect(x+12,y+3,2,3);  // gota de suor escorrendo
-  // terno barato largo demais (volume)
-  ctx.fillStyle=P.black;  ctx.fillRect(x,y+12,17,22);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x+1,y+12,15,22);
-  ctx.fillStyle=P.gray;   ctx.fillRect(x+1,y+12,2,20);  // luz na lapela
-  ctx.fillStyle=P.white2; ctx.fillRect(x+7,y+12,3,18);  // camisa
-  ctx.fillStyle=P.red;    ctx.fillRect(x+8,y+13,1,14);  // gravata do pai
-  ctx.fillStyle=P.redDk;  ctx.fillRect(x+8,y+24,1,3);
-  // braços
-  if(opt.selfie){
-    ctx.fillStyle=P.dkgray; ctx.fillRect(x-2,y+8,5,8); // braço pra cima
-    ctx.fillStyle=P.skin;   ctx.fillRect(x-2,y+6,4,3); // mão
-    ctx.fillStyle=P.black;  ctx.fillRect(x-5,y+3,6,5); // celular
-    ctx.fillStyle=P.blueLt; ctx.fillRect(x-4,y+4,4,3); // tela
-    ctx.fillStyle=P.white2; ctx.fillRect(x-4,y+4,1,1);
-  } else {
-    ctx.fillStyle=P.dkgray; ctx.fillRect(x-1,y+14,3,14); ctx.fillRect(x+15,y+14,3,14);
-    ctx.fillStyle=P.skinDk; ctx.fillRect(x-1,y+27,3,3); ctx.fillRect(x+15,y+27,3,3);
-  }
-  // pernas (calça curta demais, meia social aparecendo)
-  const k = game.walking ? Math.floor(game.bob)%2 : 0;
-  ctx.fillStyle=P.black;
-  ctx.fillRect(x+3+(k?1:0),y+34,5,12); ctx.fillRect(x+10-(k?1:0),y+34,5,12);
-  ctx.fillStyle=P.dkgray; ctx.fillRect(x+3+(k?1:0),y+34,1,12);
-  ctx.fillStyle=P.ltgray; ctx.fillRect(x+3,y+44,5,2); ctx.fillRect(x+10,y+44,5,2);
-  ctx.fillStyle=P.brownDk;ctx.fillRect(x+2,y+46,6,3); ctx.fillRect(x+10,y+46,6,3);
-  ctx.fillStyle=P.brown;  ctx.fillRect(x+2,y+46,6,1); ctx.fillRect(x+10,y+46,6,1);
+function drawItemIcon(g,id){
+  g.imageSmoothingEnabled=false; g.clearRect(0,0,32,24);
+  if(id==='celular'){ g.fillStyle=P.black; g.fillRect(11,2,8,18); g.fillStyle=P.blueLt; g.fillRect(12,3,6,13); g.fillStyle=P.white2; g.fillRect(13,4,2,3); g.fillStyle=P.metalDk; g.fillRect(14,17,2,1); }
+  else if(id==='cracha'){ g.fillStyle=P.gold; g.fillRect(15,0,2,4); g.fillStyle=P.white2; g.fillRect(8,4,16,15); g.fillStyle=P.blue; g.fillRect(8,4,16,4); g.fillStyle=P.gray; g.fillRect(10,11,12,1); g.fillRect(10,14,9,1); }
+  else if(id==='cachorro'){ g.fillStyle=P.brownHi; g.fillRect(5,7,22,9); g.fillStyle=P.brown; g.fillRect(5,13,22,3); g.fillStyle=P.red; g.fillRect(7,10,18,3); g.fillStyle=P.gold; g.fillRect(8,9,15,1); }
 }
 
-/* =========================================================================
-   UI: barra de verbos + inventário + linha de comando
-   ========================================================================= */
-function buildSentence(hoverHot){
-  let s = VERBS.find(v=>v.id===curVerb).label;
-  if(usingItem){
-    s = (curVerb==='dar'?'Dar ':'Usar ') + ITEMS[usingItem].name + (curVerb==='dar'?' para':' com');
-  }
-  if(hoverHot){ s += ' ' + hoverHot; }
-  return s;
-}
+/* ---- cena de vitória ---- */
+let winStep=0, winTimer=0;
+const winTexts=[
+  'Posto vazio. O presidente aparece na varanda pra acenar pra um grupo de escoteiros. Eu levanto o celular…',
+  '<b>CLICK!</b> Selfie tirada. Eu, suado, sorrindo demais, e ao fundo o presidente dos EUA — desfocado, acenando pra OUTRA pessoa. <b>NÃO IMPORTA. EU CONSEGUI.</b>',
+  'Três seguranças me derrubam no gramado mais bem cuidado do hemisfério norte. Minha gravata (do meu pai) voa. Mas o celular… o celular eu protejo com o corpo.',
+];
+const winEndText='<b>VOCÊ CONSEGUIU A SELFIE!</b><br><br>Postada no grupo da família: 47 curtidas. Tia Marlene: "Que orgulho!! quem é o moço atrás de você?". Você não respondeu.<br><br>Valeu a pena? Não. Passou vergonha? Sim. Mas a foto é <b>SUA</b>. Pra sempre. <b>FIM.</b>';
 
-let hoverName = '';
-function drawUI(){
-  const top=150, PH=SCREEN_H-top;
-  // painel de controle com bisel (estilo "console" de adventure)
-  ctx.fillStyle=P.uiBg2; ctx.fillRect(0,top,SCREEN_W,PH);
-  ctx.fillStyle=P.uiBg;  ctx.fillRect(0,top+2,SCREEN_W,PH-2);
-  ctx.fillStyle=P.uiLine;ctx.fillRect(0,top,SCREEN_W,1);
-  ctx.fillStyle=P.uiHi;  ctx.fillRect(0,top+1,SCREEN_W,1);
-
-  // linha de comando (auto-ajusta a fonte p/ caber, e fica grande no celular)
-  const sentence = buildSentence(hoverName);
-  const slh = PH>70 ? 15 : 9;
-  let ss = (PH>70 ? 1.6 : 1);
-  ss = Math.min(ss, (SCREEN_W-10)/Math.max(1, txtW(sentence,1)));
-  ctx.fillStyle=P.black; ctx.fillRect(3,top+2,SCREEN_W-6,slh-2);
-  txtCenterSh(sentence, top+2+Math.floor((slh-2-6*ss)/2), usingItem?P.gold:P.green2, ss);
-
-  // área de controles
-  const ay = top+slh+1;
-  const ah = SCREEN_H-ay-3;
-
-  // verbos: 2 colunas x 3 linhas (metade esquerda) — alvos grandes no toque
-  const gx=3, gw=152, gap=2;
-  const bw=Math.floor((gw-gap)/2), bh=Math.floor((ah-gap*2)/3);
-  const vs = Math.min(bh>=18?1.4:1, (bw-6)/Math.max(1, txtW('Falar com',1)));
-  for(let i=0;i<VERBS.length;i++){
-    const c=i%2, r=(i/2)|0;
-    const bx=gx+c*(bw+gap), by=ay+r*(bh+gap);
-    const sel=curVerb===VERBS[i].id;
-    ctx.fillStyle=sel?P.uiSel:P.uiHi; ctx.fillRect(bx,by,bw,bh);
-    ctx.fillStyle=sel?P.gold:P.uiLine; ctx.fillRect(bx,by,bw,1);        // bisel claro
-    ctx.fillStyle=P.black; ctx.fillRect(bx,by+bh-1,bw,1); ctx.fillRect(bx+bw-1,by,1,bh);
-    txtSh(VERBS[i].label, bx+4, by+Math.floor((bh-6*vs)/2), sel?P.white2:P.ltgray, vs);
-    VERBS[i]._box=[bx,by,bw,bh];
-  }
-
-  // inventário 3x2 (metade direita)
-  const ix=gx+gw+4, iw=SCREEN_W-ix-3, ig=2;
-  const sw=Math.floor((iw-ig*2)/3), sh=Math.floor((ah-ig)/2);
-  ctx.fillStyle=P.uiBg2; ctx.fillRect(ix-2,ay-1,iw+4,ah+2);
-  for(let s=0;s<6;s++){
-    const c=s%3, r=(s/3)|0;
-    const sx=ix+c*(sw+ig), sy=ay+r*(sh+ig);
-    ctx.fillStyle=P.black; ctx.fillRect(sx,sy,sw,sh);
-    ctx.fillStyle=P.uiHi;  ctx.fillRect(sx,sy,sw,1); ctx.fillRect(sx,sy,1,sh);
-    const item=game.inv[s];
-    if(item){
-      drawItemIcon(item, sx+2, sy+Math.floor((sh-16)/2));
-      if(usingItem===item){ ctx.strokeStyle=P.gold; ctx.lineWidth=1; ctx.strokeRect(sx+0.5,sy+0.5,sw-1,sh-1); }
-      game._invBoxes=game._invBoxes||{}; game._invBoxes[s]=[sx,sy,sw,sh,item];
-    } else if(game._invBoxes){ delete game._invBoxes[s]; }
-  }
-}
-
-function drawItemIcon(id,x,y){
-  if(id==='celular'){
-    ctx.fillStyle=P.black;  ctx.fillRect(x+2,y+1,8,13);
-    ctx.fillStyle=P.blueLt; ctx.fillRect(x+3,y+2,6,9);
-    ctx.fillStyle=P.white2; ctx.fillRect(x+4,y+3,2,2);
-    ctx.fillStyle=P.metalDk;ctx.fillRect(x+5,y+12,2,1);
-    txt('CEL',x+12,y+4,P.ltgray,1);
-  } else if(id==='cracha'){
-    ctx.fillStyle=P.white2; ctx.fillRect(x+1,y+2,12,11);
-    ctx.fillStyle=P.blue;   ctx.fillRect(x+1,y+2,12,3);
-    ctx.fillStyle=P.gray;   ctx.fillRect(x+2,y+7,8,1); ctx.fillRect(x+2,y+9,6,1);
-    ctx.fillStyle=P.gold;   ctx.fillRect(x+6,y,2,3);
-    txt('ID',x+15,y+4,P.ltgray,1);
-  } else if(id==='cachorro'){
-    ctx.fillStyle=P.brownHi; ctx.fillRect(x+1,y+4,14,6); // pão
-    ctx.fillStyle=P.brown;   ctx.fillRect(x+1,y+8,14,2);
-    ctx.fillStyle=P.red;     ctx.fillRect(x+2,y+6,12,2); // salsicha
-    ctx.fillStyle=P.gold;    ctx.fillRect(x+3,y+5,9,1);  // mostarda
-    txt('DOG',x+1,y+11,P.ltgray,1);
-  }
-}
-
-/* =========================================================================
-   TELAS: BOOT / TÍTULO / CÓPIA / INTRO / VITÓRIA
-   ========================================================================= */
-function drawBoot(){
-  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
-  txt('TorteSoft BIOS v0.94', 8, 8, P.ltgray, 1);
-  txt('640K RAM ........ OK', 8, 18, P.ltgray, 1);
-  txt('Detectando placa de som...', 8, 28, P.ltgray, 1);
-  txt('  -> PC Speaker (1) encontrado.', 8, 38, P.gray, 1);
-  txt('Carregando FLAVIO.EXE', 8, 52, P.green2, 1);
-  const dots = '.'.repeat(Math.floor(bootTimer/12)%20);
-  txt(dots, 8, 62, P.green2, 1);
-  txt('C:\\JOGOS\\FLAVIO>_', 8, 180, P.ltgray, 1);
-}
-
-let titleBlink=0;
-function drawTitle(){
-  ditherSky();
-  // horizonte com névoa, linha de árvores distantes e gramado
-  ctx.fillStyle=P.skyHaze; ctx.fillRect(0,74,SCREEN_W,28);
-  ctx.fillStyle=P.grassDk; for(let x=-6;x<SCREEN_W;x+=16) ctx.fillRect(x,96,12,8);
-  ctx.fillStyle=P.grass;   ctx.fillRect(0,102,SCREEN_W,SCREEN_H-102);
-  ctx.fillStyle=P.grassHi; ctx.fillRect(0,102,SCREEN_W,2);
-  ctx.fillStyle=P.grassDk; ctx.fillRect(0,150,SCREEN_W,SCREEN_H-150);
-
-  // mini Casa Branca sombreada
-  ctx.fillStyle=P.whiteSh; ctx.fillRect(108,86,104,40);
-  ctx.fillStyle=P.wwhite;  ctx.fillRect(110,84,100,40);
-  ctx.fillStyle=P.whiteHi; ctx.fillRect(110,84,100,3);
-  for(let i=0;i<6;i++){ ctx.fillStyle=P.whiteSh; ctx.fillRect(122+i*14,90,5,32);
-    ctx.fillStyle=P.white; ctx.fillRect(122+i*14,90,3,32); }
-  ctx.fillStyle=P.wwhite;  ctx.beginPath(); ctx.moveTo(128,84); ctx.lineTo(192,84); ctx.lineTo(160,72); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=P.whiteHi; ctx.beginPath(); ctx.moveTo(160,72); ctx.lineTo(192,84); ctx.lineTo(176,84); ctx.closePath(); ctx.fill();
-  const fl=Math.floor(Date.now()/300)%2;
-  ctx.fillStyle=P.gray; ctx.fillRect(159,64,1,9);
-  ctx.fillStyle=P.red;  ctx.fillRect(160,64,8,2); ctx.fillRect(160+fl,66,8,2);
-
-  // título cafona com sombra tripla
-  txtCenter('FLAVIO', 18, P.redDk, 4);
-  txtCenter('FLAVIO', 16, P.red,   4);
-  txtCenter('FLAVIO', 14, P.gold,  4);
-  txtCenterSh('na CASA BRANCA', 46, P.white2, 2);
-  txtCenterSh('- A Aventura -', 62, P.ltgray, 1);
-
-  drawFlavio(150,126,{});
-
-  if(Math.floor(titleBlink/30)%2===0)
-    txtCenterSh('Clique para COMEÇAR', 182, P.green2, 1);
-  txtCenterSh('(c) 1994 TorteSoft  -  Disco 1 de 1', 192, P.gray, 1);
-  if(portrait) txtCenterSh('Pressione qualquer lugar. Tipo na vida.', 206, P.dkgray, 1);
-}
-
-let cpInput='';
-function drawCopyProt(){
-  ctx.fillStyle=P.blue; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
-  ctx.fillStyle=P.uiBg; ctx.fillRect(40,46,240,108);
-  ctx.fillStyle=P.uiLine; ctx.fillRect(40,46,240,2);
-  txtCenter('PROTECAO ANTI-PIRATARIA', 54, P.gold, 1);
-  const lines = [
-    'Consulte o MANUAL incluso na caixa.',
-    '',
-    'Qual a 3a palavra da pagina 14,',
-    'paragrafo 2, do manual do FLAVIO?',
-    '',
-    '(Voce nao tem o manual. Ninguem tem.',
-    ' Apague o que digitou e tecle ENTER.)',
-  ];
-  lines.forEach((l,i)=> txtCenter(l, 70+i*11, P.ltgray, 1));
-  ctx.fillStyle=P.black; ctx.fillRect(90,150,140,12);
-  txt(cpInput + (Math.floor(titleBlink/20)%2?'_':''), 94, 152, P.green2, 1);
-  txtCenter('[ENTER] = continuar   [ESC/clique] = tanto faz', 182, P.gray, 1);
-}
-
-function drawIntro(){
-  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
-  const lines = [
-    'Washington, D.C. Manha de quinta.',
-    '',
-    'Voce e FLAVIO. Semana passada, na padaria,',
-    'voce disse a TODO MUNDO que foi convidado',
-    'para uma reuniao com o PRESIDENTE dos EUA.',
-    '',
-    'Voce nao foi convidado.',
-    '',
-    'Mas ja comprou a passagem, ja alugou o',
-    'terno do seu pai e ja avisou o grupo da',
-    'familia. Voltar sem uma SELFIE com o',
-    'presidente seria... vergonha demais.',
-    '',
-    'OBJETIVO: entrar na Casa Branca e tirar',
-    'a foto. Custe a dignidade que custar.',
-  ];
-  lines.forEach((l,i)=> txt(l, 16, 14+i*11, i<2?P.gold:P.ltgray, 1));
-  if(Math.floor(titleBlink/30)%2===0)
-    txtCenter('> clique para comecar a vergonha <', 188, P.green2, 1);
-}
-
-function drawWin(){
-  // cena da vitória, multi-passo
+function winSequence(){ state=STATE.WIN; winStep=0; winTimer=0;
+  elVerbs.style.display='none'; elInv.style.display='none'; elAction.style.display='none';
+  say(winTexts[0],'var(--ink)'); }
+function drawWinScene(){
   drawBackdrop();
-  const top=150, PH=SCREEN_H-top;
-  ctx.fillStyle=P.uiBg2; ctx.fillRect(0,top,SCREEN_W,PH);
-  ctx.fillStyle=P.uiBg;  ctx.fillRect(0,top+2,SCREEN_W,PH-2);
-  ctx.fillStyle=P.uiLine;ctx.fillRect(0,top,SCREEN_W,1);
-
-  // presidente acenando na varanda
-  const px=176, py=44;
-  ctx.fillStyle=P.skinDk; ctx.fillRect(px,py,8,7);
-  ctx.fillStyle=P.skin;   ctx.fillRect(px,py,5,7);
-  ctx.fillStyle=P.gray;   ctx.fillRect(px,py-2,8,3);
-  ctx.fillStyle=P.black;  ctx.fillRect(px-1,py+7,10,8);  // terno escuro
-  ctx.fillStyle=P.dkgray; ctx.fillRect(px-1,py+7,3,8);
-  ctx.fillStyle=P.red;    ctx.fillRect(px+3,py+8,2,6);    // gravata vermelha
-  const w = Math.floor(Date.now()/200)%2;
-  ctx.fillStyle=P.skin;   ctx.fillRect(px+8,py-2+(w?0:2),3,3); // mão acenando
-
-  // Flávio no portão tirando selfie
+  const px=176,py=44; ctx.fillStyle=P.skinDk; ctx.fillRect(px,py,8,7); ctx.fillStyle=P.skin; ctx.fillRect(px,py,5,7);
+  ctx.fillStyle=P.gray; ctx.fillRect(px,py-2,8,3); ctx.fillStyle=P.black; ctx.fillRect(px-1,py+7,10,8); ctx.fillStyle=P.dkgray; ctx.fillRect(px-1,py+7,3,8);
+  ctx.fillStyle=P.red; ctx.fillRect(px+3,py+8,2,6);
+  const w=Math.floor(Date.now()/200)%2; ctx.fillStyle=P.skin; ctx.fillRect(px+8,py-2+(w?0:2),3,3);
   drawFlavio(160,108,{selfie:true});
-  // flash da câmera
-  if(winStep>=1 && winStep<3 && Math.floor(winTimer/4)%2===0){
-    ctx.fillStyle=P.white2; ctx.fillRect(0,0,SCREEN_W,SCENE_H);
-  }
-  // braços da segurança chegando
-  if(winStep>=2){
-    ctx.fillStyle=P.black;  ctx.fillRect(120,118,40,10);
-    ctx.fillStyle=P.dkgray; ctx.fillRect(120,118,40,1);
-    ctx.fillStyle=P.skinDk; ctx.fillRect(150,120,8,4);
-  }
-
-  // textos por passo (refluídos, fonte maior no celular)
-  let t='';
-  if(winStep===0) t='Posto vazio. O presidente aparece na varanda pra acenar pra um grupo de escoteiros. Eu levanto o celular...';
-  else if(winStep===1) t='CLICK! Selfie tirada. Eu, suado, sorrindo demais, e ao fundo o presidente dos Estados Unidos, desfocado, acenando pra OUTRA pessoa. NAO IMPORTA. EU CONSEGUI.';
-  else if(winStep===2) t='Tres segurancas me derrubam no gramado mais bem cuidado do hemisferio norte. Minha gravata (do meu pai) voa. Mas o celular... o celular eu protejo com o corpo.';
-  const sc=dlgScale, lh=Math.round(9*sc);
-  wrap(t,SCREEN_W-16,sc).forEach((l,i)=> txtSh(l,10,top+6+i*lh,P.ltgray,sc));
-  if(winStep<3) txtCenterSh('(toque para continuar)', SCREEN_H-9, P.gray, 1);
-
-  if(winStep>=3) drawWinCard();
+  if(winStep>=1&&winStep<3&&Math.floor(winTimer/4)%2===0){ ctx.fillStyle=P.white2; ctx.fillRect(0,0,SCREEN_W,SCREEN_H); }
+  if(winStep>=2){ ctx.fillStyle=P.black; ctx.fillRect(120,118,40,10); ctx.fillStyle=P.dkgray; ctx.fillRect(120,118,40,1); ctx.fillStyle=P.skinDk; ctx.fillRect(150,120,8,4); }
 }
-
-function drawWinCard(){
-  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
-  // moldura "polaroid"
-  const fy=8;
-  ctx.fillStyle=P.dkgray; ctx.fillRect(73,fy+1,174,110);
-  ctx.fillStyle=P.white2; ctx.fillRect(72,fy,174,110);
-  ctx.fillStyle=P.gray;   ctx.fillRect(80,fy+6,158,82);
-  // foto: gramado + casa + Flávio selfie + presidente borrado
-  ctx.fillStyle=P.grass;  ctx.fillRect(80,fy+6,158,82);
-  ctx.fillStyle=P.grassHi;ctx.fillRect(80,fy+6,158,2);
-  ctx.fillStyle=P.wwhite; ctx.fillRect(150,fy+14,84,28);
-  ctx.fillStyle=P.whiteSh;for(let i=0;i<5;i++) ctx.fillRect(156+i*12,fy+18,3,22);
-  drawFlavio(98,fy+40,{selfie:true});
-  ctx.fillStyle=P.skin;   ctx.fillRect(190,fy+28,10,9);   // presidente borradinho
-  ctx.fillStyle=P.black;  ctx.fillRect(189,fy+37,12,11);
-  ctx.fillStyle=P.red;    ctx.fillRect(193,fy+38,2,7);
-  txt('FLAVIO + (?) PRESIDENTE', 86, fy+90, P.black, 1);
-
-  let y=fy+122;
-  txtCenterSh('VOCE CONSEGUIU A SELFIE!', y, P.gold, 1); y+=13;
-  const sub = [
-    ['Postado no grupo da familia: 47 curtidas.', P.gray],
-    ['Tia Marlene: "Que orgulho!! quem e o moco', P.gray],
-    ['atras de voce?". Voce nao respondeu.', P.gray],
-    ['Valeu a pena? Nao. Passou vergonha? Sim.', P.ltgray],
-    ['Mas a foto e SUA. Pra sempre. FIM.', P.gold],
-  ];
-  sub.forEach(l=>{ txtCenterSh(l[0], y, l[1], 1); y+=9; });
-  if(Math.floor(titleBlink/30)%2===0)
-    txtCenterSh('clique para jogar de novo', Math.min(y+3, SCREEN_H-9), P.green2, 1);
-}
+function endWin(){ game.flags.won=true; say(winEndText,'var(--amber)'); elEnd.style.display='block'; }
 
 /* =========================================================================
-   RENDER PRINCIPAL
+   OVERLAYS (telas) — DOM legível
    ========================================================================= */
-function drawGame(){
-  drawBackdrop();              // céu+casa+gramado+cerca (cache) + bandeira animada
-  drawCart(12,86);
-  drawTrash(64,98);
-  drawBush(262,104);
-  drawTourist(100,74);
-  if(game.flags.squirrel) drawSquirrel(272,116);
-  drawFlavio(Math.round(game.flavioX),108,{});
-  drawGuard(158,60);
+function showOverlay(html){ elOvc.innerHTML=html; elOverlay.classList.add('show'); }
+function hideOverlay(){ elOverlay.classList.remove('show'); }
 
-  // fala/subtítulo no topo (refluída no tamanho de fonte atual)
-  if(speech){
-    const sc = dlgScale, lh = Math.round(9*sc);
-    const lines = wrap(speech.text, 300, sc);
-    const bh = 7 + lines.length*lh;
-    ctx.fillStyle=P.black;  ctx.fillRect(10,4,300,bh);
-    ctx.fillStyle=P.uiLine; ctx.fillRect(10,4,300,1);
-    ctx.fillStyle=P.uiBg2;  ctx.fillRect(10,4+bh-1,300,1);
-    lines.forEach((l,i)=> txtSh(l, 15, 7+i*lh, speech.color, sc));
-    const hint='[toque p/ continuar]';
-    txt(hint, 306-txtW(hint,1), 4+bh-8, P.gray, 1);
-  }
-
-  drawUI();
+function screenTitle(){
+  state=STATE.TITLE;
+  showOverlay(
+    '<div class="ov">'+
+    '<h1>FLÁVIO</h1><h2>na CASA BRANCA &middot; A Aventura</h2>'+
+    '<div class="scene-mini">🏛️🤳</div>'+
+    '<button class="go" id="ov-go">▶ Começar</button>'+
+    '<p class="credit">(c) 1994 TorteSoft — Disco 1 de 1.<br>Um point-and-click ruim de propósito.</p>'+
+    '</div>');
+  document.getElementById('ov-go').onclick=()=>{ initAudio(); clickSnd(); screenIntro(); };
+}
+function screenIntro(){
+  state=STATE.INTRO;
+  showOverlay(
+    '<div class="ov">'+
+    '<p><b>Washington, D.C. Manhã de quinta.</b></p>'+
+    '<p>Você é <b>Flávio</b>. Semana passada, na padaria, você disse a todo mundo que foi convidado pra uma reunião com o <b>presidente dos EUA</b>.</p>'+
+    '<p>Você não foi convidado.</p>'+
+    '<p>Mas já comprou a passagem, alugou o terno do seu pai e avisou o grupo da família. Voltar sem uma <b>selfie</b> com o presidente seria… vergonha demais.</p>'+
+    '<p><b>OBJETIVO:</b> entrar na Casa Branca e tirar a foto. Custe a dignidade que custar.</p>'+
+    '<button class="go" id="ov-go">Continuar</button></div>');
+  document.getElementById('ov-go').onclick=()=>{ clickSnd(); screenCopy(); };
+}
+function screenCopy(){
+  state=STATE.COPY;
+  showOverlay(
+    '<div class="ov">'+
+    '<h2 style="color:var(--amber)">PROTEÇÃO ANTI-PIRATARIA</h2>'+
+    '<p>Consulte o <b>MANUAL</b> incluso na caixa.</p>'+
+    '<p>Qual a 3ª palavra da página 14, parágrafo 2, do manual do Flávio?</p>'+
+    '<input id="ov-in" placeholder="digite aqui…" autocomplete="off">'+
+    '<p class="dim">(Você não tem o manual. Ninguém tem. Apague o que digitou e toque em Continuar.)</p>'+
+    '<button class="go" id="ov-go">Continuar</button></div>');
+  document.getElementById('ov-go').onclick=()=>{ clickSnd(); startGame(); };
+}
+function startGame(){
+  hideOverlay(); state=STATE.GAME;
+  elVerbs.style.display=''; elInv.style.display=''; elAction.style.display=''; elEnd.style.display='none';
+  buildVerbs(); buildInventory(); updateAction();
+  say('Cheguei. A Casa Branca. Respira, Flávio. Aja natural.<br><br><b>Como jogar:</b> toque num <b>verbo</b>, depois toque numa coisa da cena. Para usar/dar um item, toque nele (no inventário) e depois no alvo.','var(--green)');
 }
 
-function render(){
-  ctx.fillStyle=P.black; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
-  switch(state){
-    case STATE.BOOT: drawBoot(); break;
-    case STATE.TITLE: drawTitle(); break;
-    case STATE.COPYPROT: drawCopyProt(); break;
-    case STATE.INTRO: drawIntro(); break;
-    case STATE.GAME: drawGame(); break;
-    case STATE.WIN: drawWin(); break;
-  }
-  // escala pro canvas visível (nearest neighbor)
-  vctx.imageSmoothingEnabled=false;
-  vctx.clearRect(0,0,view.width,view.height);
-  vctx.drawImage(buf,0,0,view.width,view.height);
+function resetGame(){
+  game.inv=['celular']; for(const k in game.flags) game.flags[k]=false;
+  game.flavioX=60; game.flavioTargetX=60; game.walking=false; curVerb='olhar'; usingItem=null;
+  winStep=0; winTimer=0;
 }
+document.getElementById('replay').onclick=()=>{ clickSnd(); resetGame(); screenTitle(); };
 
 /* =========================================================================
-   LOOP
+   INPUT (toque na cena)
    ========================================================================= */
-function loop(){
-  titleBlink++; bootTimer++;
-  if(state===STATE.BOOT && bootTimer>150){ state=STATE.TITLE; }
+function pointInHot(x,y,h){ return x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h; }
+function sceneCoords(ev){ const r=cv.getBoundingClientRect(); const t=ev.changedTouches?ev.changedTouches[0]:ev;
+  return { x:(t.clientX-r.left)/r.width*SCREEN_W, y:(t.clientY-r.top)/r.height*SCREEN_H }; }
 
-  // andar do Flávio
-  if(game.walking){
-    game.bob += 0.4;
-    const dx = game.flavioTargetX - game.flavioX;
-    if(Math.abs(dx) < 2){ game.flavioX = game.flavioTargetX; game.walking=false; }
-    else { game.flavioX += Math.sign(dx)*1.6; }
-  }
-
-  // sequência de vitória avança no tempo
+function onSceneTap(ev){ initAudio();
+  const {x,y}=sceneCoords(ev);
   if(state===STATE.WIN){
-    winTimer++;
-    if(winStep===0 && winTimer>70){ winStep=1; winTimer=0; camera(); }
-    else if(winStep===1 && winTimer>90){ winStep=2; winTimer=0; }
-    else if(winStep===2 && winTimer>110){ winStep=3; winTimer=0; triumph(); }
-  }
-
-  render();
-  requestAnimationFrame(loop);
-}
-
-/* =========================================================================
-   INPUT
-   ========================================================================= */
-function screenToBuf(ev){
-  const r = view.getBoundingClientRect();
-  const t = ev.touches ? ev.touches[0] : ev;
-  const x = (t.clientX - r.left) / r.width * SCREEN_W;
-  const y = (t.clientY - r.top)  / r.height * SCREEN_H;
-  return {x,y};
-}
-
-function pointInHot(x,y,h){ return x>=h.x && x<=h.x+h.w && y>=h.y && y<=h.y+h.h; }
-
-function handleClick(x,y){
-  initAudio();
-  clickSnd();
-  const h=document.getElementById('hint'); if(h) h.style.display='none';
-
-  if(state===STATE.TITLE){ state=STATE.COPYPROT; cpInput=''; return; }
-  if(state===STATE.COPYPROT){ state=STATE.INTRO; return; }
-  if(state===STATE.INTRO){ state=STATE.GAME; say('Cheguei. A Casa Branca. Respira, Flávio. Aja natural. (Olhe e fale com as coisas. Para usar/dar um item, clique nele no inventário e depois no alvo.)', P.green2); return; }
-  if(state===STATE.WIN){
-    if(winStep>=3){ resetGame(); state=STATE.TITLE; }
-    else { winStep=Math.min(3,winStep+1); winTimer=0; if(winStep===3) triumph(); }
+    if(winStep<3){ winStep=Math.min(3,winStep+1); winTimer=0; if(winStep===3){ triumph(); endWin(); } else say(winTexts[winStep]); }
     return;
   }
   if(state!==STATE.GAME) return;
-
-  // fala aberta -> fecha
-  if(speech){ clearSpeech(); return; }
-
-  // clique na UI?
-  if(y>=150){
-    // verbos
-    for(const v of VERBS){
-      if(v._box){ const[bx,by,bw,bh]=v._box;
-        if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh){ curVerb=v.id; if(v.id!=='usar'&&v.id!=='dar') usingItem=null; blip(); return; } }
-    }
-    // inventário
-    if(game._invBoxes){
-      for(const k in game._invBoxes){
-        const[sx,sy,sw,sh,item]=game._invBoxes[k];
-        if(x>=sx&&x<=sx+sw&&y>=sy&&y<=sy+sh){ clickInvItem(item); return; }
-      }
-    }
-    return;
-  }
-
-  // clique na cena -> hotspot?
-  for(const h of HOTSPOTS){
-    if(pointInHot(x,y,h)){
-      if(h.walkX!==undefined && curVerb!=='andar') walkTo(h.walkX);
-      interact(h.id);
-      return;
-    }
-  }
-  // clique no chão -> andar
-  if(y>70){ walkTo(x); }
-  else { if(usingItem){ usingItem=null; curVerb='olhar'; } }
+  for(const h of HOTSPOTS){ if(pointInHot(x,y,h)){ flashName(h.name);
+    if(h.walkX!=null && curVerb!=='andar') walkTo(h.walkX);
+    interact(h.id); refreshVerbs(); refreshInv(); updateAction(); return; } }
+  if(y>70) walkTo(x);
+  else if(usingItem){ usingItem=null; curVerb='olhar'; refreshVerbs(); refreshInv(); updateAction(); }
 }
-
-function updateHover(x,y){
-  hoverName='';
-  if(state!==STATE.GAME || y>=150) return;
-  for(const h of HOTSPOTS){ if(pointInHot(x,y,h)){ hoverName=h.name; break; } }
-}
-
-view.addEventListener('mousedown', e=>{ const p=screenToBuf(e); handleClick(p.x,p.y); });
-view.addEventListener('mousemove', e=>{ const p=screenToBuf(e); updateHover(p.x,p.y); });
-view.addEventListener('touchstart', e=>{ e.preventDefault(); const p=screenToBuf(e); updateHover(p.x,p.y); handleClick(p.x,p.y); }, {passive:false});
-
-window.addEventListener('keydown', e=>{
-  if(state===STATE.COPYPROT){
-    if(e.key==='Enter'||e.key==='Escape'){ state=STATE.INTRO; }
-    else if(e.key==='Backspace'){ cpInput=cpInput.slice(0,-1); }
-    else if(e.key.length===1 && cpInput.length<18){ cpInput+=e.key; blip(); }
-    e.preventDefault();
-  }
-});
-
-function resetGame(){
-  game.inv=['celular'];
-  for(const k in game.flags) game.flags[k]=false;
-  game.flavioX=60; game.flavioTargetX=60; game.walking=false;
-  game._invBoxes={}; usingItem=null; curVerb='olhar'; speech=null;
-  winStep=0; winTimer=0;
-}
+cv.addEventListener('click', onSceneTap);
+cv.addEventListener('touchend', e=>{ e.preventDefault(); onSceneTap(e); }, {passive:false});
+document.addEventListener('pointerdown', initAudio, {once:false});
+window.addEventListener('keydown', e=>{ if(state===STATE.COPY && (e.key==='Enter'||e.key==='Escape')){ startGame(); } });
+document.getElementById('hint') && (()=>{ const h=document.getElementById('hint');
+  document.addEventListener('pointerdown',()=>{ h.style.display='none'; },{once:true}); })();
 
 /* =========================================================================
-   ESCALA RESPONSIVA: preenche a tela (fracionário). Em RETRATO o buffer
-   fica mais alto (260) p/ um painel de controle grande, com botões e
-   diálogos legíveis no celular. Em paisagem volta ao clássico 320x200.
+   LOOP (só anima/desenha a cena; UI é DOM)
    ========================================================================= */
-function resize(){
-  const pad = 4;
-  const maxW = Math.max(160, window.innerWidth - pad);
-  const maxH = Math.max(120, window.innerHeight - pad);
-  portrait = (maxH / maxW) > 1.15;
-  const wantH = portrait ? 260 : 200;
-  dlgScale = portrait ? 1.4 : 1;
-  if(buf.height !== wantH){
-    SCREEN_H = wantH;
-    buf.height = SCREEN_H; view.width = SCREEN_W; view.height = SCREEN_H;
-    ctx.imageSmoothingEnabled = false; ctx.textBaseline = 'top';
-    vctx.imageSmoothingEnabled = false;
+function loop(){
+  if(game.walking){ game.bob+=0.4; const dx=game.flavioTargetX-game.flavioX;
+    if(Math.abs(dx)<2){ game.flavioX=game.flavioTargetX; game.walking=false; } else game.flavioX+=Math.sign(dx)*1.6; }
+  if(state===STATE.WIN){ winTimer++;
+    if(winStep===0&&winTimer>70){ winStep=1; winTimer=0; camera(); say(winTexts[1]); }
+    else if(winStep===1&&winTimer>90){ winStep=2; winTimer=0; say(winTexts[2]); }
+    else if(winStep===2&&winTimer>110){ winStep=3; winTimer=0; triumph(); endWin(); }
   }
-  const scale = Math.min(maxW/SCREEN_W, maxH/SCREEN_H);
-  view.style.width  = Math.round(SCREEN_W*scale)+'px';
-  view.style.height = Math.round(SCREEN_H*scale)+'px';
+  if(tapNameTimer>0 && --tapNameTimer===0) elTapName.style.opacity='0';
+
+  if(state===STATE.WIN) drawWinScene();
+  else {
+    drawBackdrop(); drawCart(12,86); drawTrash(64,98); drawBush(262,104); drawTourist(100,74);
+    if(game.flags.squirrel) drawSquirrel(272,116);
+    drawFlavio(Math.round(game.flavioX),108,{}); drawGuard(158,60);
+  }
+  requestAnimationFrame(loop);
 }
-window.addEventListener('resize', resize);
-window.addEventListener('orientationchange', resize);
-resize();
+
+screenTitle();
 loop();
 </script>
 </body>
