@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>WC 2022 · Backs & Wingers</title>
+<style>
+  :root{
+    --bg:#0e0e16; --panel:#171723; --panel2:#1f1f2e; --line:#2c2c3c;
+    --ink:#e7e7ef; --dim:#8a8a9c; --gold:#d8b020; --green:#3ec06a;
+    --red:#e0644f; --bar:#3a3a52;
+    --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    font-size:15px; line-height:1.4; -webkit-text-size-adjust:100%;
+    padding-bottom:calc(64px + var(--safe-b));
+  }
+  a{color:var(--green);text-decoration:none}
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+  h1{font-size:18px;margin:0;letter-spacing:.5px}
+  h1 .accent{color:var(--gold)}
+  .meta{color:var(--dim);font-size:12px;margin-top:2px}
+
+  /* sticky control bar */
+  .controls{
+    position:sticky;top:0;z-index:20;background:rgba(14,14,22,.96);
+    backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+    padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+  }
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input[type=search],select{
+    background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;
+  }
+  input[type=search]{flex:1;min-width:120px}
+  select{flex:1;min-width:0}
+  .chips{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .chip{
+    white-space:nowrap;background:var(--panel2);border:1px solid var(--line);
+    color:var(--dim);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;
+  }
+  .chip.on{background:var(--gold);color:#1a1a10;border-color:var(--gold);font-weight:600}
+  .mins{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);flex:1}
+  .mins input{flex:1}
+  label.sortlbl{font-size:12px;color:var(--dim)}
+
+  /* list */
+  .count{padding:8px 16px 2px;color:var(--dim);font-size:12px}
+  ul.list{list-style:none;margin:0;padding:8px 10px}
+  li.card{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    margin-bottom:8px;overflow:hidden;
+  }
+  .head{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+  .num{width:26px;height:26px;flex:none;border-radius:6px;background:var(--panel2);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .who{flex:1;min-width:0}
+  .nm{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .metricbox{text-align:right;flex:none;min-width:74px}
+  .mval{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+  .mbar{height:5px;border-radius:3px;background:var(--bar);margin-top:4px;overflow:hidden}
+  .mbar > i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#f0d060)}
+  select.role{
+    flex:none;width:78px;font-size:12px;padding:6px 6px;border-radius:8px;
+    color:var(--gold);font-weight:600;background:var(--panel2)
+  }
+  .caret{flex:none;color:var(--dim);font-size:12px;transition:transform .15s}
+  li.open .caret{transform:rotate(90deg)}
+
+  /* detail */
+  .detail{display:none;border-top:1px solid var(--line);padding:12px;background:var(--panel2)}
+  li.open .detail{display:block}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;font-size:12px;color:var(--dim)}
+  .tag{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .grp{margin-top:10px}
+  .grp h4{margin:0 0 6px;font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--gold)}
+  .stat{display:grid;grid-template-columns:96px 1fr 40px;gap:8px;align-items:center;margin:5px 0;font-size:12px}
+  .stat .lab{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pbar{height:14px;border-radius:4px;background:var(--bar);position:relative;overflow:hidden}
+  .pbar > i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+  .pbar > span{position:absolute;right:6px;top:0;line-height:14px;font-size:10px;color:#0c0c12;font-weight:700}
+  .pval{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .note{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px;font-family:inherit;font-size:13px;margin-top:10px;resize:vertical}
+  .roleedit{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;color:var(--dim)}
+  .roleedit select{flex:none;width:120px;color:var(--gold);font-weight:600}
+  .auto{font-size:11px;color:var(--dim)}
+
+  /* bottom toolbar */
+  .toolbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:30;
+    background:rgba(23,23,35,.97);border-top:1px solid var(--line);
+    display:flex;gap:8px;padding:10px 12px calc(10px + var(--safe-b));
+  }
+  .toolbar button{
+    flex:1;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:9px;padding:10px;font-size:13px;font-family:inherit;cursor:pointer
+  }
+  .toolbar button.primary{background:var(--gold);color:#1a1a10;border-color:var(--gold);font-weight:600}
+  .toolbar .editcount{flex:none;align-self:center;color:var(--dim);font-size:12px;padding:0 4px}
+  .empty{padding:40px 16px;text-align:center;color:var(--dim)}
+  @media(min-width:760px){
+    ul.list{max-width:860px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:8px}
+    .controls{align-items:stretch}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>World Cup 2022 · <span class="accent">Backs &amp; Wingers</span></h1>
+  <div class="meta" id="meta">loading…</div>
+</header>
+
+<div class="controls">
+  <div class="row">
+    <input type="search" id="q" placeholder="Search player, club, country…" autocomplete="off">
+    <select id="team"><option value="">All teams</option></select>
+  </div>
+  <div class="chips" id="rolechips">
+    <span class="chip on" data-role="flanks">Backs &amp; Wingers</span>
+    <span class="chip" data-role="fb">Full-backs</span>
+    <span class="chip" data-role="wing">Wingers</span>
+    <span class="chip" data-role="DF">Defenders</span>
+    <span class="chip" data-role="MF">Midfield</span>
+    <span class="chip" data-role="FW">Forwards</span>
+    <span class="chip" data-role="all">Everyone</span>
+  </div>
+  <div class="row">
+    <label class="sortlbl">Compare</label>
+    <select id="sort"></select>
+    <div class="mins">
+      <span id="minlbl">≥180'</span>
+      <input type="range" id="mins" min="0" max="700" step="30" value="180">
+    </div>
+  </div>
+</div>
+
+<div class="count" id="count"></div>
+<ul class="list" id="list"></ul>
+<div class="empty" id="empty" style="display:none">No players match these filters.</div>
+
+<div class="toolbar">
+  <span class="editcount" id="editcount">0 edits</span>
+  <button id="export">Export</button>
+  <button id="import">Import</button>
+  <button id="reset">Reset</button>
+</div>
+<input type="file" id="file" accept="application/json" style="display:none">
+
+<script>
+const LS_KEY = "wc2022flanks_edits_v1";
+const ROLE_OPTIONS = ["GK","CB","LB","RB","LWB","RWB","DM","CM","AM","LM","RM","LW","RW","ST","CF"];
+// which roles each quick-filter accepts (auto seeds use FB / W / CB / MF / ST)
+const FB_ROLES  = new Set(["FB","LB","RB","LWB","RWB","WB"]);
+const WING_ROLES= new Set(["W","LW","RW","LM","RM"]);
+const fmt = v => v==null ? "–" : (Math.abs(v)>=10 ? v.toFixed(1) : v.toFixed(2));
+const pctColor = p => p==null ? "var(--bar)"
+  : `hsl(${Math.round(p*1.2)} 60% ${30+p*0.22}%)`; // red→green by percentile
+
+let DATA, METRICS, MByKey, edits = {};
+const idOf = p => p.name + "|" + p.team;
+
+// ---- edits persistence ----
+function loadEdits(){ try{ edits = JSON.parse(localStorage.getItem(LS_KEY))||{} }catch(e){ edits={} } }
+function saveEdits(){ localStorage.setItem(LS_KEY, JSON.stringify(edits)); updateEditCount(); }
+function getRole(p){ const e=edits[idOf(p)]; return (e&&e.role) || p.role_auto; }
+function getNote(p){ const e=edits[idOf(p)]; return (e&&e.note) || ""; }
+function setEdit(p, field, val){
+  const id=idOf(p); const e=edits[id]||{};
+  if(field==="role"){ if(val===p.role_auto) delete e.role; else e.role=val; }
+  if(field==="note"){ if(!val) delete e.note; else e.note=val; }
+  if(Object.keys(e).length) edits[id]=e; else delete edits[id];
+  saveEdits();
+}
+function updateEditCount(){
+  const n=Object.keys(edits).length;
+  document.getElementById("editcount").textContent = n+" edit"+(n===1?"":"s");
+}
+
+// ---- filtering ----
+const state = { role:"flanks", team:"", q:"", sort:"crs_pen", mins:180 };
+function matchRole(p){
+  const r=getRole(p);
+  switch(state.role){
+    case "all": return true;
+    case "flanks": return FB_ROLES.has(r)||WING_ROLES.has(r);
+    case "fb": return FB_ROLES.has(r);
+    case "wing": return WING_ROLES.has(r);
+    default: return p.pos.startsWith(state.role); // DF/MF/FW
+  }
+}
+function filtered(){
+  const q=state.q.toLowerCase();
+  let arr = DATA.players.filter(p =>
+    p.minutes>=state.mins && matchRole(p) &&
+    (!state.team || p.team===state.team) &&
+    (!q || p.name.toLowerCase().includes(q) || (p.club||"").toLowerCase().includes(q) || p.team.toLowerCase().includes(q))
+  );
+  const mk=state.sort;
+  arr.sort((a,b)=>{
+    const av=a.metrics[mk].p90, bv=b.metrics[mk].p90;
+    if(av==null&&bv==null) return b.minutes-a.minutes;
+    if(av==null) return 1; if(bv==null) return -1;
+    const hib = MByKey[mk].higher;
+    return hib ? bv-av : av-bv;
+  });
+  return arr;
+}
+
+// ---- rendering ----
+function roleSelect(p, cls){
+  const cur=getRole(p);
+  const opts=ROLE_OPTIONS.slice();
+  if(!opts.includes(cur)) opts.unshift(cur); // keep auto seeds like FB / W / MF
+  return `<select class="${cls}" data-id="${encodeURIComponent(idOf(p))}">`+
+    opts.map(o=>`<option ${o===cur?"selected":""}>${o}</option>`).join("")+`</select>`;
+}
+function miniStat(p){
+  const m=p.metrics[state.sort]; const lbl=MByKey[state.sort].label;
+  const per = MByKey[state.sort].per90;
+  const valTxt = m.p90==null ? "–" : fmt(m.p90);
+  const pct = m.pct;
+  return `<div class="metricbox">
+      <div class="mval">${valTxt}</div>
+      <div class="mbar"><i style="width:${pct||0}%"></i></div>
+    </div>`;
+}
+function detailHTML(p){
+  let html = `<div class="roleedit">Role <b>(editable)</b> ${roleSelect(p,"role rolebig")}
+      <span class="auto">auto-suggested: ${p.role_auto}</span></div>`;
+  html += `<div class="tags">
+      <span class="tag">${p.pos} · src position</span>
+      <span class="tag">${p.club||"—"}</span>
+      <span class="tag">${p.minutes}′ · ${p.games} games (${p.starts} st)</span>
+      ${p.jersey?`<span class="tag">#${p.jersey}</span>`:""}
+      ${p.boots?`<span class="tag">${p.boots}</span>`:""}
+      ${p.fifa_rank?`<span class="tag">FIFA #${p.fifa_rank}</span>`:""}
+    </div>`;
+  for(const g of DATA.groups){
+    html += `<div class="grp"><h4>${g}</h4>`;
+    for(const m of METRICS.filter(x=>x.group===g)){
+      const cell=p.metrics[m.key]; const pct=cell.pct;
+      html += `<div class="stat">
+        <span class="lab">${m.label}</span>
+        <span class="pbar"><i style="width:${pct==null?0:pct}%;background:${pctColor(pct)}"></i>
+          <span>${pct==null?"":pct}</span></span>
+        <span class="pval">${cell.p90==null?"–":fmt(cell.p90)}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `<textarea class="note" rows="2" placeholder="Notes on this player… (saved locally)"
+      data-id="${encodeURIComponent(idOf(p))}">${getNote(p).replace(/</g,"&lt;")}</textarea>`;
+  html += `<div class="auto" style="margin-top:8px">Percentiles vs qualified outfield players
+      (≥ ${DATA.qualify_90s} full games). Values shown are per 90 mins (rates as-is).</div>`;
+  return html;
+}
+function render(){
+  const arr=filtered();
+  const list=document.getElementById("list");
+  document.getElementById("count").textContent =
+    arr.length+" players · compare: "+MByKey[state.sort].label+(MByKey[state.sort].per90?" /90":"");
+  document.getElementById("empty").style.display = arr.length?"none":"block";
+  list.innerHTML = arr.map(p=>`
+    <li class="card" data-id="${encodeURIComponent(idOf(p))}">
+      <div class="head">
+        <span class="num">${p.jersey||""}</span>
+        <span class="who">
+          <div class="nm">${p.name}</div>
+          <div class="sub">${p.team} · ${p.club||"—"} · ${p.minutes}′</div>
+        </span>
+        ${roleSelect(p,"role")}
+        ${miniStat(p)}
+        <span class="caret">▶</span>
+      </div>
+      <div class="detail"></div>
+    </li>`).join("");
+}
+
+// ---- events ----
+function byId(id){ return decodeURIComponent(id); }
+function playerById(id){ const [name,team]=byId(id).split("|"); return DATA.players.find(p=>p.name===name&&p.team===team); }
+
+document.addEventListener("change", e=>{
+  if(e.target.classList.contains("role")){
+    const p=playerById(e.target.dataset.id); setEdit(p,"role",e.target.value);
+    // sync the twin select (row <-> detail) and re-filter if role filter active
+    document.querySelectorAll(`select.role[data-id="${e.target.dataset.id}"]`).forEach(s=>s.value=e.target.value);
+    if(state.role!=="all") render();
+  }
+});
+document.addEventListener("input", e=>{
+  if(e.target.classList.contains("note")){
+    const p=playerById(e.target.dataset.id); setEdit(p,"note",e.target.value);
+  }
+});
+document.getElementById("list").addEventListener("click", e=>{
+  if(e.target.closest("select")) return;           // don't toggle when editing role
+  const head=e.target.closest(".head"); if(!head) return;
+  const li=head.parentElement;
+  const open=li.classList.toggle("open");
+  const d=li.querySelector(".detail");
+  d.innerHTML = open ? detailHTML(playerById(li.dataset.id)) : "";
+});
+
+document.getElementById("q").addEventListener("input", e=>{ state.q=e.target.value; render(); });
+document.getElementById("team").addEventListener("change", e=>{ state.team=e.target.value; render(); });
+document.getElementById("sort").addEventListener("change", e=>{ state.sort=e.target.value; render(); });
+document.getElementById("mins").addEventListener("input", e=>{
+  state.mins=+e.target.value; document.getElementById("minlbl").textContent="≥"+state.mins+"'"; render();
+});
+document.getElementById("rolechips").addEventListener("click", e=>{
+  const c=e.target.closest(".chip"); if(!c) return;
+  state.role=c.dataset.role;
+  document.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===c));
+  render();
+});
+
+// export / import / reset
+document.getElementById("export").addEventListener("click", ()=>{
+  const blob=new Blob([JSON.stringify(edits,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="wc2022-flanks-edits.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("import").addEventListener("click", ()=>document.getElementById("file").click());
+document.getElementById("file").addEventListener("change", e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ edits=JSON.parse(r.result)||{}; saveEdits(); render(); }
+    catch(err){ alert("Invalid JSON"); } };
+  r.readAsText(f); e.target.value="";
+});
+document.getElementById("reset").addEventListener("click", ()=>{
+  if(confirm("Discard all your role tags & notes?")){ edits={}; saveEdits(); render(); }
+});
+
+// ---- boot ----
+fetch("data.json").then(r=>r.json()).then(d=>{
+  DATA=d; METRICS=d.metrics; MByKey=Object.fromEntries(METRICS.map(m=>[m.key,m]));
+  loadEdits(); updateEditCount();
+  document.getElementById("meta").innerHTML =
+    `${d.players.length} players · built ${d.built} · stats from FBref via `+
+    `<a href="https://www.kaggle.com/datasets/${d.sources.fbref.split('datasets/')[1]}" target="_blank">Kaggle</a>. `+
+    `Source position is only GK/DF/MF/FW — assign left/right roles below; edits save in your browser.`;
+  const teamSel=document.getElementById("team");
+  [...new Set(d.players.map(p=>p.team))].sort().forEach(t=>{
+    const o=document.createElement("option"); o.value=o.textContent=t; teamSel.appendChild(o);
+  });
+  const sortSel=document.getElementById("sort");
+  for(const g of d.groups){
+    const og=document.createElement("optgroup"); og.label=g;
+    METRICS.filter(m=>m.group===g).forEach(m=>{
+      const o=document.createElement("option"); o.value=m.key; o.textContent=m.label;
+      if(m.key===state.sort) o.selected=true; og.appendChild(o);
+    });
+    sortSel.appendChild(og);
+  }
+  render();
+}).catch(err=>{
+  document.getElementById("meta").textContent="Failed to load data.json — serve this folder over HTTP.";
+  console.error(err);
+});
+</script>
+</body>
+</html>
