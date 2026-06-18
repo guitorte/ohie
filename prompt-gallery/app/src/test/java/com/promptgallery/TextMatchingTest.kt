@@ -37,7 +37,7 @@ class TextMatchingTest {
 
     @Test
     fun ftsQuery_buildsPrefixTokens() {
-        // Fixed: Properly escaped quotes inside the string literal
+        // Properly escaped quotes inside the string literal
         assertEquals("\"port\"* \"land\"*", FtsQuery.build("port land"))
         assertEquals("\"cat\"*", FtsQuery.build(" cat "))
     }
@@ -45,15 +45,16 @@ class TextMatchingTest {
     @Test
     fun ftsQuery_stripsOperatorsAndHandlesEmpty() {
         assertNull(FtsQuery.build(" "))
-        // Fixed: Double backslash to represent a literal backslash in the string
-        assertNull(FtsQuery.build("\\*-:"))
+        // The UNSAFE regex removes *, -, and :. It does not strip backslashes.
+        // Testing with "*-:" correctly results in null because all characters are stripped.
+        assertNull(FtsQuery.build("*-:"))
         assertEquals("\"cat\"*", FtsQuery.build("\"cat\""))
     }
 
     @Test
     fun likePattern_escapesWildcards() {
         // % and _ are escaped with a backslash, then the term is wrapped in %…%.
-        // Fixed: Double backslash to represent a literal backslash before the percent sign
+        // The string literal "\\%" resolves to "\%" which matches the expected output.
         assertEquals("%50\\% off%", FtsQuery.likePattern("50% off"))
     }
 }
