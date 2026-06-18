@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+        The image library can be large and is fully reconstructable from a
+        user-initiated export, so it is excluded from automatic cloud backup.
+        Preferences are small and safe to back up.
+    -->
+    <include domain="sharedpref" path="." />
+    <exclude domain="file" path="images/" />
+    <exclude domain="file" path="thumbnails/" />
+    <exclude domain="database" path="prompt_gallery.db" />
+</full-backup-content>
