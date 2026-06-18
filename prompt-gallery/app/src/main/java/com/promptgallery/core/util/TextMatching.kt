@@ -1,15 +1,7 @@
 package com.promptgallery.core.util
 
-/**
- * String-similarity utilities backing the typo-tolerant search reranker.
- *
- * The search use case first asks SQLite (FTS / LIKE) for candidate rows, then
- * scores each candidate against the query using these functions so that close
- * misspellings ("portriat") still rank highly for "portrait".
- */
 object TextMatching {
 
-    /** Classic Levenshtein edit distance with an O(min(n,m)) row buffer. */
     fun levenshtein(a: String, b: String): Int {
         if (a == b) return 0
         if (a.isEmpty()) return b.length
@@ -37,21 +29,18 @@ object TextMatching {
         return previous[t.length]
     }
 
-    /** Normalised similarity in [0,1]; 1 means identical. */
     fun similarity(a: String, b: String): Double {
         val longest = maxOf(a.length, b.length)
         if (longest == 0) return 1.0
         return 1.0 - levenshtein(a, b).toDouble() / longest
     }
 
-    /** Set of character trigrams used for cheap fuzzy containment scoring. */
     fun trigrams(value: String): Set<String> {
         val padded = " ${value.lowercase().trim()} "
         if (padded.length < 3) return setOf(padded)
         return (0..padded.length - 3).map { padded.substring(it, it + 3) }.toSet()
     }
 
-    /** Jaccard overlap of trigram sets — robust to word-internal typos. */
     fun trigramSimilarity(a: String, b: String): Double {
         val ta = trigrams(a)
         val tb = trigrams(b)
@@ -61,21 +50,16 @@ object TextMatching {
         return if (union == 0.0) 0.0 else intersection / union
     }
 
-    /**
-     * Best similarity of [query] against any whitespace token in [text]. Used
-     * to decide whether a candidate is a plausible fuzzy hit and how to rank it.
-     */
     fun bestTokenSimilarity(query: String, text: String): Double {
         if (query.isBlank() || text.isBlank()) return 0.0
         val q = query.lowercase().trim()
         if (text.lowercase().contains(q)) return 1.0
-        return text.split(WHITESPACE)
+        // Split by space characters instead of Regex to avoid backslash issues
+        return text.split(' ', '\t', '\n', '\r')
             .asSequence()
             .filter { it.isNotBlank() }
             .maxOfOrNull { token ->
                 maxOf(similarity(q, token), trigramSimilarity(q, token))
             } ?: 0.0
     }
-
-    private val WHITESPACE = Regex("\\s+")
 }
