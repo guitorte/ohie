@@ -39,6 +39,7 @@ fun ImageEntity.toDomain(
     collectionIds: List<String> = emptyList(),
 ): Image = Image(
     id = id,
+    assetType = com.promptgallery.domain.model.AssetType.fromName(assetType),
     filePath = filePath,
     fileName = fileName,
     thumbnailPath = thumbnailPath,
@@ -76,6 +77,7 @@ fun ImageWithRelations.toDomain(): Image = image.toDomain(
 
 fun Image.toEntity(): ImageEntity = ImageEntity(
     id = id,
+    assetType = assetType.name,
     filePath = filePath,
     fileName = fileName,
     thumbnailPath = thumbnailPath,

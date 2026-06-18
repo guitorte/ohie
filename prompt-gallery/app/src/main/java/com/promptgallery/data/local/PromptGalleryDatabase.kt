@@ -8,7 +8,9 @@ import com.promptgallery.data.local.dao.ImageDao
 import com.promptgallery.data.local.dao.ImageVersionDao
 import com.promptgallery.data.local.dao.PromptTemplateDao
 import com.promptgallery.data.local.dao.SearchDao
+import com.promptgallery.data.local.dao.ReferenceDao
 import com.promptgallery.data.local.dao.TagDao
+import com.promptgallery.data.local.entity.ArtworkReferenceCrossRef
 import com.promptgallery.data.local.entity.CollectionEntity
 import com.promptgallery.data.local.entity.FolderEntity
 import com.promptgallery.data.local.entity.ImageCollectionCrossRef
@@ -30,8 +32,9 @@ import com.promptgallery.data.local.entity.TagEntity
         FolderEntity::class,
         PromptTemplateEntity::class,
         ImageVersionEntity::class,
+        ArtworkReferenceCrossRef::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class PromptGalleryDatabase : RoomDatabase() {
@@ -42,6 +45,7 @@ abstract class PromptGalleryDatabase : RoomDatabase() {
     abstract fun promptTemplateDao(): PromptTemplateDao
     abstract fun imageVersionDao(): ImageVersionDao
     abstract fun searchDao(): SearchDao
+    abstract fun referenceDao(): ReferenceDao
 
     companion object {
         const val DATABASE_NAME = "prompt_gallery.db"

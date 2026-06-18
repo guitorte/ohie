@@ -9,9 +9,12 @@ import com.promptgallery.core.util.IoDispatcher
 import com.promptgallery.data.local.dao.CollectionDao
 import com.promptgallery.data.local.dao.ImageDao
 import com.promptgallery.data.local.dao.ImageVersionDao
+import com.promptgallery.data.local.dao.ReferenceDao
 import com.promptgallery.data.local.dao.TagDao
+import com.promptgallery.data.local.entity.ArtworkReferenceCrossRef
 import com.promptgallery.data.local.entity.ImageVersionEntity
 import com.promptgallery.data.storage.FileStorage
+import com.promptgallery.domain.model.AssetType
 import com.promptgallery.domain.model.ColorLabel
 import com.promptgallery.domain.model.Image
 import com.promptgallery.domain.model.ImageVersion
@@ -30,6 +33,7 @@ class ImageRepositoryImpl @Inject constructor(
     private val tagDao: TagDao,
     private val collectionDao: CollectionDao,
     private val versionDao: ImageVersionDao,
+    private val referenceDao: ReferenceDao,
     private val fileStorage: FileStorage,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ImageRepository {
@@ -47,8 +51,9 @@ class ImageRepositoryImpl @Inject constructor(
         favoritesOnly: Boolean,
         minRating: Int,
         sort: SortOption,
+        assetType: AssetType,
     ): Flow<PagingData<Image>> = Pager(pagingConfig()) {
-        imageDao.pagingSource(folderId, favoritesOnly, minRating, sort.name)
+        imageDao.pagingSource(assetType.name, folderId, favoritesOnly, minRating, sort.name)
     }.flow.map { paging -> paging.map { it.toDomain() } }
 
     override fun pagedCollection(collectionId: String): Flow<PagingData<Image>> =
@@ -70,6 +75,9 @@ class ImageRepositoryImpl @Inject constructor(
     }
 
     override fun observeTotalCount(): Flow<Int> = imageDao.observeCount()
+
+    override fun observeCount(assetType: AssetType): Flow<Int> =
+        imageDao.observeCountByType(assetType.name)
 
     override fun observeModels(): Flow<List<String>> =
         imageDao.observeModelFacets().map { facets -> facets.map { it.aiModel } }
@@ -138,6 +146,37 @@ class ImageRepositoryImpl @Inject constructor(
             negativePrompt = version.negativePrompt,
             changeNote = "Restored v${version.versionNumber}",
         )
+    }
+
+    // ---- Reference relationships -----------------------------------------
+
+    override fun observeReferences(artworkId: String): Flow<List<Image>> =
+        referenceDao.observeReferencesForArtwork(artworkId).map { list -> list.map { it.toDomain() } }
+
+    override fun observeBacklinks(referenceId: String): Flow<List<Image>> =
+        referenceDao.observeArtworksForReference(referenceId).map { list -> list.map { it.toDomain() } }
+
+    override fun observeUsageCount(referenceId: String): Flow<Int> =
+        referenceDao.observeUsageCount(referenceId)
+
+    override suspend fun attachReferences(
+        artworkId: String,
+        referenceIds: List<String>,
+    ) = withContext(dispatcher) {
+        if (referenceIds.isEmpty()) return@withContext
+        val now = now()
+        referenceDao.linkAll(referenceIds.map { ArtworkReferenceCrossRef(artworkId, it, now) })
+    }
+
+    override suspend fun detachReference(
+        artworkId: String,
+        referenceId: String,
+    ) = withContext(dispatcher) {
+        referenceDao.unlink(artworkId, referenceId)
+    }
+
+    override suspend fun referenceIdsFor(artworkId: String): List<String> = withContext(dispatcher) {
+        referenceDao.referenceIdsFor(artworkId)
     }
 
     private fun now() = System.currentTimeMillis()

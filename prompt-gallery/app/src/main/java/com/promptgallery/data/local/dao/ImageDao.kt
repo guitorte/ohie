@@ -44,6 +44,9 @@ interface ImageDao {
     @Query("SELECT COUNT(*) FROM images")
     fun observeCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM images WHERE assetType = :assetType")
+    fun observeCountByType(assetType: String): Flow<Int>
+
     // ---- Paged library queries -------------------------------------------
     // A single parameterised query keeps the SQL in one place. Null filter
     // arguments are neutralised by the `:flag IS NULL OR ...` pattern so the
@@ -53,7 +56,8 @@ interface ImageDao {
     @Query(
         """
         SELECT * FROM images
-        WHERE (:folderId IS NULL OR folderId = :folderId)
+        WHERE assetType = :assetType
+          AND (:folderId IS NULL OR folderId = :folderId)
           AND (:favoritesOnly = 0 OR isFavorite = 1)
           AND (:minRating = 0 OR rating >= :minRating)
         ORDER BY
@@ -69,6 +73,7 @@ interface ImageDao {
         """,
     )
     fun pagingSource(
+        assetType: String,
         folderId: String?,
         favoritesOnly: Boolean,
         minRating: Int,
