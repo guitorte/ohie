@@ -1,6 +1,7 @@
 package com.promptgallery.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import java.io.File
  * color-label affordances, and switches to a selection appearance during
  * multi-select. Long-press enters selection (Google Photos pattern).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ImageCell(
     image: Image,

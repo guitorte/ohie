@@ -226,6 +226,7 @@ private fun FolderRow(folder: Folder, onClick: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CreateCollectionDialog(
     onCreate: (String) -> Unit,
