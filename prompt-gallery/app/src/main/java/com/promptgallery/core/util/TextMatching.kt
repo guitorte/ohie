@@ -46,7 +46,7 @@ object TextMatching {
 
     /** Set of character trigrams used for cheap fuzzy containment scoring. */
     fun trigrams(value: String): Set<String> {
-        val padded = "  ${value.lowercase().trim()} "
+        val padded = " ${value.lowercase().trim()} "
         if (padded.length < 3) return setOf(padded)
         return (0..padded.length - 3).map { padded.substring(it, it + 3) }.toSet()
     }
