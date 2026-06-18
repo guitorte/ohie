@@ -1,6 +1,7 @@
 package com.promptgallery.domain.repository
 
 import androidx.paging.PagingData
+import com.promptgallery.domain.model.AssetType
 import com.promptgallery.domain.model.ColorLabel
 import com.promptgallery.domain.model.Image
 import com.promptgallery.domain.model.ImageVersion
@@ -15,6 +16,7 @@ interface ImageRepository {
         favoritesOnly: Boolean,
         minRating: Int,
         sort: SortOption,
+        assetType: AssetType = AssetType.ARTWORK,
     ): Flow<PagingData<Image>>
 
     fun pagedCollection(collectionId: String): Flow<PagingData<Image>>
@@ -26,6 +28,8 @@ interface ImageRepository {
     suspend fun getImage(id: String): Image?
 
     fun observeTotalCount(): Flow<Int>
+
+    fun observeCount(assetType: AssetType): Flow<Int>
 
     fun observeModels(): Flow<List<String>>
 
@@ -49,4 +53,21 @@ interface ImageRepository {
     fun observeVersions(imageId: String): Flow<List<ImageVersion>>
 
     suspend fun restoreVersion(versionId: String, imageId: String)
+
+    // ---- Reference relationships (Obsidian-style backlinks) --------------
+
+    /** Reference images attached to the given artwork. */
+    fun observeReferences(artworkId: String): Flow<List<Image>>
+
+    /** Artworks that use the given reference (usage history / backlinks). */
+    fun observeBacklinks(referenceId: String): Flow<List<Image>>
+
+    /** How many artworks currently use the given reference. */
+    fun observeUsageCount(referenceId: String): Flow<Int>
+
+    suspend fun attachReferences(artworkId: String, referenceIds: List<String>)
+
+    suspend fun detachReference(artworkId: String, referenceId: String)
+
+    suspend fun referenceIdsFor(artworkId: String): List<String>
 }

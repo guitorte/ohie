@@ -27,6 +27,7 @@ interface SearchDao {
         SELECT images.* FROM images
         JOIN images_fts ON images.rowid = images_fts.rowid
         WHERE images_fts MATCH :ftsQuery
+          AND images.assetType = :assetType
           AND (:filterFav = 0 OR images.isFavorite = 1)
           AND (:minRating = 0 OR images.rating >= :minRating)
           AND (:folderId IS NULL OR images.folderId = :folderId)
@@ -46,6 +47,7 @@ interface SearchDao {
     )
     suspend fun searchFts(
         ftsQuery: String,
+        assetType: String,
         filterFav: Boolean,
         minRating: Int,
         folderId: String?,
@@ -66,7 +68,8 @@ interface SearchDao {
     @Query(
         """
         SELECT images.* FROM images
-        WHERE (:hasText = 0 OR (
+        WHERE images.assetType = :assetType
+          AND (:hasText = 0 OR (
                 images.prompt LIKE :like OR images.negativePrompt LIKE :like OR
                 images.title LIKE :like OR images.description LIKE :like OR
                 images.customNotes LIKE :like OR images.aiModel LIKE :like))
@@ -90,6 +93,7 @@ interface SearchDao {
     suspend fun searchFiltered(
         hasText: Boolean,
         like: String,
+        assetType: String,
         filterFav: Boolean,
         minRating: Int,
         folderId: String?,

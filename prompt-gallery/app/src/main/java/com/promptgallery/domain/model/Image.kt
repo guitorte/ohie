@@ -7,6 +7,7 @@ package com.promptgallery.domain.model
  */
 data class Image(
     val id: String,
+    val assetType: AssetType = AssetType.ARTWORK,
     val filePath: String,
     val fileName: String,
     val thumbnailPath: String,

@@ -32,11 +32,16 @@ import androidx.room.PrimaryKey
         Index("creationDate"),
         Index("importDate"),
         Index("modifiedDate"),
+        Index("assetType"),
     ],
 )
 data class ImageEntity(
     @PrimaryKey
     val id: String,
+
+    /** Whether this row is an artwork or a reference image. */
+    @ColumnInfo(defaultValue = "'ARTWORK'")
+    val assetType: String = "ARTWORK",
 
     /** Absolute path of the full-resolution image inside app-private storage. */
     val filePath: String,

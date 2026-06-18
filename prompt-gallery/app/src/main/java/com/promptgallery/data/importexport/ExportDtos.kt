@@ -9,19 +9,24 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class LibraryExportDto(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val exportedAt: Long,
     val app: String = "Prompt Gallery",
+    /** True when this package contains only assets changed since a prior backup. */
+    val incremental: Boolean = false,
     val images: List<ImageExportDto>,
     val tags: List<TagExportDto> = emptyList(),
     val collections: List<CollectionExportDto> = emptyList(),
     val folders: List<FolderExportDto> = emptyList(),
     val templates: List<TemplateExportDto> = emptyList(),
+    val references: List<ReferenceLinkDto> = emptyList(),
+    val settings: SettingsExportDto? = null,
 )
 
 @Serializable
 data class ImageExportDto(
     val id: String,
+    val assetType: String = "ARTWORK",
     val fileName: String,
     val title: String,
     val description: String,
@@ -72,4 +77,22 @@ data class TemplateExportDto(
     val negativePromptText: String,
     val variablesJson: String,
     val description: String,
+)
+
+/** An artwork↔reference edge, preserved so backlinks survive a restore. */
+@Serializable
+data class ReferenceLinkDto(
+    val artworkId: String,
+    val referenceId: String,
+    val addedDate: Long,
+)
+
+/** User preferences captured in a full backup. */
+@Serializable
+data class SettingsExportDto(
+    val themeMode: String,
+    val dynamicColor: Boolean,
+    val defaultGalleryView: String,
+    val gridColumns: Int,
+    val defaultSort: String,
 )

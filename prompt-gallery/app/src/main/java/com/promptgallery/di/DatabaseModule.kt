@@ -2,12 +2,14 @@ package com.promptgallery.di
 
 import android.content.Context
 import androidx.room.Room
+import com.promptgallery.data.local.Migrations
 import com.promptgallery.data.local.PromptGalleryDatabase
 import com.promptgallery.data.local.dao.CollectionDao
 import com.promptgallery.data.local.dao.FolderDao
 import com.promptgallery.data.local.dao.ImageDao
 import com.promptgallery.data.local.dao.ImageVersionDao
 import com.promptgallery.data.local.dao.PromptTemplateDao
+import com.promptgallery.data.local.dao.ReferenceDao
 import com.promptgallery.data.local.dao.SearchDao
 import com.promptgallery.data.local.dao.TagDao
 import com.promptgallery.data.storage.SecurityManager
@@ -43,6 +45,7 @@ object DatabaseModule {
         }
 
         return builder
+            .addMigrations(*Migrations.ALL)
             .setQueryExecutor(java.util.concurrent.Executors.newFixedThreadPool(4))
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
@@ -55,4 +58,5 @@ object DatabaseModule {
     @Provides fun provideTemplateDao(db: PromptGalleryDatabase): PromptTemplateDao = db.promptTemplateDao()
     @Provides fun provideVersionDao(db: PromptGalleryDatabase): ImageVersionDao = db.imageVersionDao()
     @Provides fun provideSearchDao(db: PromptGalleryDatabase): SearchDao = db.searchDao()
+    @Provides fun provideReferenceDao(db: PromptGalleryDatabase): ReferenceDao = db.referenceDao()
 }
