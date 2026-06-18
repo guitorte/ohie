@@ -10,6 +10,7 @@ package com.promptgallery.core.util
  */
 object FtsQuery {
 
+    // Matches: " * ^ ( ) : -
     private val UNSAFE = Regex("[\"*^():\\-]")
     private val WHITESPACE = Regex("\\s+")
 
@@ -18,6 +19,7 @@ object FtsQuery {
             .split(WHITESPACE)
             .map { it.replace(UNSAFE, "").trim() }
             .filter { it.isNotEmpty() }
+        
         if (tokens.isEmpty()) return null
         return tokens.joinToString(" ") { "\"$it\"*" }
     }
@@ -25,9 +27,10 @@ object FtsQuery {
     /** Builds a SQL LIKE pattern (`%term%`) for the fuzzy fallback path. */
     fun likePattern(raw: String): String {
         val escaped = raw.trim()
-            .replace("\\", "\\\\")
-            .replace("%", "\\%")
-            .replace("_", "\\_")
+            .replace("\\", "") // Remove backslashes
+            .replace("\"", "") // Remove quotes
+            .replace("%", "\\%") // Escape percent
+            .replace("_", "\\_") // Escape underscore
         return "%$escaped%"
     }
 }
