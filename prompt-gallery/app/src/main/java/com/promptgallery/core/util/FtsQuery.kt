@@ -1,36 +1,33 @@
 package com.promptgallery.core.util
 
-/**
- * Builds safe FTS4 `MATCH` expressions from raw user input.
- *
- * User text can contain characters that are operators in the FTS grammar
- * (quotes, `*`, `-`, `:` …). We tokenize on whitespace, strip those, and emit a
- * prefix query per token so "port land" becomes `port* land*`, matching
- * partial words as the user types.
- */
 object FtsQuery {
 
-    // Matches: " * ^ ( ) : -
-    private val UNSAFE = Regex("[\"*^():\\-]")
-    private val WHITESPACE = Regex("\\s+")
+    // We use a set of characters instead of Regex to avoid backslash issues
+    private val UNSAFE_CHARS = setOf('"', '*', '^', '(', ')', ':', '-')
 
     fun build(raw: String): String? {
-        val tokens = raw.trim()
-            .split(WHITESPACE)
-            .map { it.replace(UNSAFE, "").trim() }
+        // Split by whitespace without using Regex
+        val tokens = raw.trim().split(' ', '\t', '\n', '\r')
+            .map { token -> token.filter { it !in UNSAFE_CHARS }.trim() }
             .filter { it.isNotEmpty() }
         
         if (tokens.isEmpty()) return null
-        return tokens.joinToString(" ") { "\"$it\"*" }
+        
+        // \u0022 is the Unicode escape for a double quote
+        val q = "\u0022" 
+        return tokens.joinToString(" ") { "$q$it$q*" }
     }
 
-    /** Builds a SQL LIKE pattern (`%term%`) for the fuzzy fallback path. */
     fun likePattern(raw: String): String {
+        // \u005C is the Unicode escape for a backslash
+        val b = "\u005C" 
+        val q = "\u0022" 
+        
         val escaped = raw.trim()
-            .replace("\\", "") // Remove backslashes
-            .replace("\"", "") // Remove quotes
-            .replace("%", "\\%") // Escape percent
-            .replace("_", "\\_") // Escape underscore
+            .replace(b, "") 
+            .replace(q, "") 
+            .replace("%", "$b%") 
+            .replace("_", "$b\u005F") // \u005F is the Unicode escape for underscore
         return "%$escaped%"
     }
 }
