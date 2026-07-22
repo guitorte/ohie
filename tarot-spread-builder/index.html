@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#09060f">
+    <title>Arcanum</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     TELA 1: HOME
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-home" class="screen">
+    <div class="screen-header">
+        <div class="header-title-wrap">
+            <h1>Arcanum</h1>
+            <div class="subtitle">Tarot Layout Generator</div>
+        </div>
+    </div>
+
+    <div class="screen-content no-nav-pad">
+        <div class="section-label">Baralho Ativo</div>
+        <div class="deck-strip" id="home-deck-strip">
+            <!-- preenchido por JS -->
+        </div>
+
+        <div class="section-label">Spreads</div>
+        <div class="spread-grid" id="home-spread-grid">
+            <!-- preenchido por JS -->
+        </div>
+    </div>
+
+    <div class="home-footer">
+        <div class="quick-config">
+            <div class="qc-tile" id="qc-invertidas" onclick="toggleInvertidas()">
+                <span class="qc-label">Invertidas</span>
+                <div class="toggle off" id="toggle-invertidas"></div>
+            </div>
+            <div class="qc-tile" id="qc-arcanos" onclick="cycleArcanos()">
+                <span class="qc-label">Arcanos</span>
+                <span class="qc-value" id="qc-arcanos-val">78</span>
+            </div>
+        </div>
+
+        <button class="btn-cta" id="btn-start" onclick="startReading()" disabled>
+            <span>✦</span> Iniciar Leitura
+        </button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     TELA 2: JOGAR (Seed + Seleção)
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-play" class="screen">
+    <div class="screen-header">
+        <button class="btn-back" onclick="goBack('screen-home')" aria-label="Voltar">&#8592;</button>
+        <div class="header-title-wrap">
+            <h1 id="play-title">Seed</h1>
+            <div class="subtitle" id="play-subtitle"></div>
+        </div>
+        <div class="header-badge" id="play-seed-badge">SEED #1</div>
+    </div>
+
+    <div class="seed-actions">
+        <button class="btn-seed primary" onclick="generateSeed()">&#8635; Novo Seed</button>
+        <button class="btn-seed" onclick="openMultiSeed()">&#8942; Multi-Seed</button>
+        <button class="btn-seed" onclick="clearSelection()">&#8856; Limpar</button>
+    </div>
+
+    <div class="number-input-bar">
+        <div class="number-input-label">— Digitar Números —</div>
+        <div class="number-input-row">
+            <input type="text" class="number-field" id="card-number-input"
+                   placeholder="ex: 3 17 42 8 55"
+                   autocomplete="off" inputmode="numeric">
+            <button class="btn-apply" onclick="applyNumberInput()" title="Aplicar">✓</button>
+        </div>
+        <div class="number-hint" id="number-hint">0 selecionadas</div>
+    </div>
+
+    <div class="seed-list-header">
+        <span>Sorteio Completo</span>
+        <span class="seed-count-badge" id="seed-total-badge">0 cartas</span>
+    </div>
+
+    <div class="seed-list" id="seed-list">
+        <!-- preenchido por JS -->
+    </div>
+
+    <div class="selection-bar">
+        <div class="selection-count">
+            <strong id="cards-selected-count">0</strong>/<span id="cards-needed">0</span>
+        </div>
+        <div class="selected-chips" id="selected-chips"></div>
+        <button class="btn-primary" id="btn-confirm-cards" disabled onclick="confirmCards()">
+            Gerar
+        </button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     TELA 3: RESULTADO
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-result" class="screen">
+    <div class="screen-header">
+        <button class="btn-back" onclick="goBack('screen-play')" aria-label="Voltar">&#8592;</button>
+        <div class="header-title-wrap">
+            <h1>Resultado</h1>
+            <div class="subtitle" id="result-subtitle"></div>
+        </div>
+    </div>
+
+    <div class="screen-content no-nav-pad">
+        <div class="result-info" id="result-info"></div>
+
+        <details class="result-details">
+            <summary class="result-summary">Cartas selecionadas</summary>
+            <div class="result-card-list" id="result-cards-list"></div>
+        </details>
+
+        <div id="result-loading" style="display:none">
+            Gerando<span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span>
+        </div>
+
+        <div class="result-canvas-wrap">
+            <canvas id="result-canvas" style="display:none"></canvas>
+        </div>
+    </div>
+
+    <div class="result-actions" id="result-actions" style="display:none">
+        <button class="btn-primary" onclick="saveImage()">Salvar</button>
+        <button class="btn-secondary" onclick="shareImage()">Compartilhar</button>
+        <button class="btn-secondary" onclick="newReading()">Nova Leitura</button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     TELA 4: SPREADS
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-spreads" class="screen">
+    <div class="screen-header">
+        <div class="header-title-wrap">
+            <h1>Spreads</h1>
+            <div class="subtitle">Gerenciar layouts</div>
+        </div>
+    </div>
+
+    <div class="screen-content">
+        <div style="height:8px"></div>
+        <div class="spreads-list" id="spreads-list">
+            <!-- preenchido por JS -->
+        </div>
+        <div style="height:72px"></div><!-- espaço para FAB -->
+    </div>
+
+    <!-- FAB -->
+    <button class="fab" onclick="openEditor(null)" title="Novo spread">+</button>
+
+    <!-- Editor overlay -->
+    <div class="editor-overlay" id="editor-overlay">
+        <div class="editor-header">
+            <button class="btn-back" onclick="closeEditor()" aria-label="Fechar editor">&#8592;</button>
+            <h2 id="editor-title">Novo Spread</h2>
+            <span style="font-size:9px;color:var(--muted);font-family:var(--font-head);letter-spacing:.1em">PRÉVIA</span>
+        </div>
+
+        <div class="editor-name-wrap">
+            <span class="editor-name-label">Nome</span>
+            <input type="text" class="editor-name-input" id="editor-name" placeholder="Nome do spread">
+        </div>
+
+        <div class="editor-tools">
+            <div class="tool-btn active" data-tool="card" onclick="selectTool('card')">
+                <span class="t-icon">▦</span>
+                <span class="t-label">Carta</span>
+            </div>
+            <div class="tool-btn" data-tool="empty" onclick="selectTool('empty')">
+                <span class="t-icon">⬜</span>
+                <span class="t-label">Vazio</span>
+            </div>
+            <div class="tool-btn" data-tool="overlap" onclick="selectTool('overlap')">
+                <span class="t-icon" style="font-size:13px">⧉</span>
+                <span class="t-label">Sobrepost.</span>
+            </div>
+            <div class="tool-btn" data-tool="erase" onclick="selectTool('erase')">
+                <span class="t-icon">⌫</span>
+                <span class="t-label">Apagar</span>
+            </div>
+            <div class="tool-btn" data-tool="nudge-up" onclick="selectTool('nudge-up')">
+                <span class="t-icon">⤴</span>
+                <span class="t-label">½ Cima</span>
+            </div>
+            <div class="tool-btn" data-tool="nudge-down" onclick="selectTool('nudge-down')">
+                <span class="t-icon">⤵</span>
+                <span class="t-label">½ Baixo</span>
+            </div>
+        </div>
+
+        <div class="tool-hint" id="tool-hint">Clique na grade para posicionar uma carta</div>
+
+        <div class="editor-content">
+            <div class="editor-grid" id="editor-grid">
+                <!-- preenchido por JS -->
+            </div>
+        </div>
+
+        <div class="editor-row-btns">
+            <button class="editor-row-btn" onclick="editorAddRow()">+ Linha</button>
+            <button class="editor-row-btn danger" onclick="editorDelRow()">− Linha</button>
+            <button class="editor-row-btn" onclick="editorAddCol()">+ Coluna</button>
+            <button class="editor-row-btn danger" onclick="editorDelCol()">− Coluna</button>
+            <button class="editor-row-btn" onclick="editorUndo()">↺ Desfazer</button>
+        </div>
+
+        <button class="editor-save" onclick="saveEditor()">✦ Salvar Spread</button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     TELA 5: CONFIGURAÇÕES
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-settings" class="screen">
+    <div class="screen-header">
+        <div class="header-title-wrap">
+            <h1>Configurações</h1>
+        </div>
+    </div>
+
+    <div class="screen-content">
+
+        <!-- Baralhos -->
+        <div class="settings-section">
+            <div class="settings-section-title">Baralhos</div>
+            <div class="deck-list" id="settings-deck-list">
+                <!-- preenchido por JS -->
+            </div>
+            <div style="height:8px"></div>
+            <div class="deck-add-btn" onclick="openAddDeckModal()">
+                <span style="font-size:20px;color:var(--border)">+</span>
+                <span>Cadastrar Baralho</span>
+            </div>
+        </div>
+
+        <!-- Tipo de arcanos -->
+        <div class="settings-section">
+            <div class="settings-section-title">Tipo de Arcanos</div>
+            <div class="arcana-toggle">
+                <div class="arcana-opt" id="arcana-majors" onclick="setArcana('majors')">Maiores (22)</div>
+                <div class="arcana-opt active" id="arcana-full" onclick="setArcana('full')">Todos (78)</div>
+            </div>
+            <div class="setting-row" style="padding-top:4px;border-bottom:none">
+                <div class="setting-icon">🃏</div>
+                <div class="setting-info">
+                    <div class="setting-label">Aplicável a</div>
+                    <div class="setting-sub">Apenas Marselha e RWS (Lenormand usa todos)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multiplicador de Seed -->
+        <div class="settings-section">
+            <div class="settings-section-title">Multiplicador de Seed</div>
+            <div class="setting-row" style="border-bottom:none">
+                <div class="setting-icon">⊕</div>
+                <div class="setting-info">
+                    <div class="setting-label">Cópias do Baralho</div>
+                    <div class="setting-sub" id="multiplier-hint">Padrão automático por tipo</div>
+                </div>
+                <div class="stepper">
+                    <button class="stepper-btn" onclick="changeMultiplier(-1)">−</button>
+                    <span class="stepper-val" id="multiplier-val">Auto</span>
+                    <button class="stepper-btn" onclick="changeMultiplier(1)">+</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cartas Invertidas -->
+        <div class="settings-section">
+            <div class="settings-section-title">Cartas Invertidas</div>
+            <div class="setting-row">
+                <div class="setting-icon">↕</div>
+                <div class="setting-info">
+                    <div class="setting-label">Habilitar Invertidas</div>
+                    <div class="setting-sub">Embaralha cartas em sentido invertido</div>
+                </div>
+                <div class="toggle off" id="toggle-inv-settings" onclick="toggleInvSettings()"></div>
+            </div>
+
+            <div class="slider-block" id="slider-block">
+                <div class="slider-header">
+                    <span class="slider-title">Percentual de Inversão</span>
+                    <span class="slider-val" id="slider-val-display">30<sup>%</sup></span>
+                </div>
+                <div class="slider-track" id="slider-track">
+                    <div class="slider-fill" id="slider-fill" style="width:30%"></div>
+                    <div class="slider-thumb" id="slider-thumb" style="left:30%"></div>
+                </div>
+                <div class="slider-marks">
+                    <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exportar -->
+        <div class="settings-section">
+            <div class="settings-section-title">Exportar</div>
+            <div class="bg-toggle">
+                <div class="bg-opt active" id="bg-black" onclick="setBg('black')">⬛ Preto (JPEG)</div>
+                <div class="bg-opt" id="bg-transp" onclick="setBg('transp')">⬜ Transparente (PNG)</div>
+            </div>
+            <div class="export-grid">
+                <div class="export-btn primary" onclick="saveImage()">
+                    <span class="export-icon">💾</span>
+                    <span class="export-label">Salvar Galeria</span>
+                    <span class="export-sub">JPEG / PNG</span>
+                </div>
+                <div class="export-btn" onclick="shareImage()">
+                    <span class="export-icon">⎘</span>
+                    <span class="export-label">Compartilhar</span>
+                    <span class="export-sub">Android Share</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metadados EXIF -->
+        <div class="settings-section">
+            <div class="settings-section-title">Metadados EXIF</div>
+            <div class="setting-row">
+                <div class="setting-icon">🏷</div>
+                <div class="setting-info">
+                    <div class="setting-label">Embutir Metadados</div>
+                    <div class="setting-sub">Layout, baralho e cartas no arquivo</div>
+                </div>
+                <div class="toggle" id="toggle-exif" onclick="toggleExif()"></div>
+            </div>
+            <div class="setting-row" style="border-bottom:none">
+                <div class="setting-icon">✒</div>
+                <div class="setting-info">
+                    <div class="setting-label">Autor</div>
+                </div>
+                <input type="text" class="text-input-field" id="exif-author-input"
+                       placeholder="seu nome" autocomplete="off">
+            </div>
+        </div>
+
+        <div style="height:12px"></div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     BOTTOM NAV (compartilhada pelas telas Home, Spreads, Config)
+     ════════════════════════════════════════════════════════════════════════════ -->
+<nav class="bottom-nav" id="bottom-nav">
+    <div class="nav-item active" data-screen="screen-home" onclick="navTo('screen-home')">
+        <span class="nav-icon">⌂</span>
+        <span class="nav-label">Início</span>
+    </div>
+    <div class="nav-item" data-screen="screen-spreads" onclick="navTo('screen-spreads')">
+        <span class="nav-icon">⊞</span>
+        <span class="nav-label">Spreads</span>
+    </div>
+    <div class="nav-item" data-screen="screen-settings" onclick="navTo('screen-settings')">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">Config</span>
+    </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     MODAL: Cadastrar Baralho
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-deck">
+    <div class="modal-sheet">
+        <div class="modal-header">
+            <span class="modal-title">Cadastrar Baralho</span>
+            <div class="modal-close" onclick="closeModal('modal-deck')">✕</div>
+        </div>
+        <div class="modal-body">
+            <div class="form-field">
+                <div class="form-label">Nome</div>
+                <input type="text" class="form-input" id="new-deck-nome" placeholder="Ex: Thoth Tarot">
+            </div>
+            <div class="form-field">
+                <div class="form-label">Diretório de Imagens</div>
+                <input type="text" class="form-input" id="new-deck-dir" placeholder="Ex: decks/img-thoth">
+            </div>
+            <div class="form-field">
+                <div class="form-label">Extensão</div>
+                <input type="text" class="form-input" id="new-deck-ext" placeholder=".jpg" value=".jpg">
+            </div>
+            <div class="form-field">
+                <div class="form-label">Tipo de Cartas</div>
+                <div class="arcana-toggle" style="margin-bottom:0">
+                    <div class="arcana-opt active" id="new-deck-type-tarot" onclick="setNewDeckType('tarot')">Tarot (78)</div>
+                    <div class="arcana-opt" id="new-deck-type-oracle" onclick="setNewDeckType('oracle')">Oracular</div>
+                </div>
+            </div>
+            <div class="form-field" id="new-deck-count-field" style="display:none">
+                <div class="form-label">Número de Cartas</div>
+                <input type="number" class="form-input" id="new-deck-count" placeholder="36" value="36" min="1" max="99">
+                <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">
+                    Os arquivos de imagem devem se chamar <b>01</b>, <b>02</b> … até o número de cartas, com a extensão acima (ex: 01.jpg, 02.jpg…).
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeModal('modal-deck')" style="flex:1">Cancelar</button>
+            <button class="btn-primary" onclick="confirmAddDeck()" style="flex:2">Salvar Baralho</button>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     MODAL: Multi-Seed
+     ════════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-multiseed">
+    <div class="modal-sheet">
+        <div class="modal-header">
+            <span class="modal-title">Multi-Seed — Comparar</span>
+            <div class="modal-close" onclick="closeModal('modal-multiseed')">✕</div>
+        </div>
+        <div class="modal-body">
+            <div class="multi-seed-grid" id="multi-seed-grid">
+                <!-- 3 colunas de seeds geradas por JS -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeModal('modal-multiseed')" style="flex:1">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- Scripts -->
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
