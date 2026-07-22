@@ -170,10 +170,9 @@ function duplicateSpread(id) {
     const source = all[id];
     if (!source) return null;
     const newId = getNextCustomId();
-    const copy = {
-        nome:      source.nome + ' (cópia)',
-        estrutura: JSON.parse(JSON.stringify(source.estrutura))
-    };
+    const copy = { nome: source.nome + ' (cópia)' };
+    if (source.grid) copy.grid = JSON.parse(JSON.stringify(source.grid));
+    else             copy.estrutura = JSON.parse(JSON.stringify(source.estrutura));
     saveSpread(newId, copy);
     return newId;
 }
@@ -205,9 +204,15 @@ function getAllDecks() {
 
 function contarCartasLayout(layoutId) {
     const all = getAllLayouts();
-    if (!all[layoutId]) return 0;
+    const layout = all[layoutId];
+    if (!layout) return 0;
+    if (layout.grid) {
+        let count = 0;
+        for (const card of layout.grid.cards) count += (card.t === 'overlap') ? 2 : 1;
+        return count;
+    }
     let count = 0;
-    for (const row of all[layoutId].estrutura) {
+    for (const row of layout.estrutura) {
         for (const item of row) {
             if (item === null) continue;
             if (typeof item === 'number') { count++; continue; }
@@ -221,8 +226,11 @@ function contarCartasLayout(layoutId) {
     return count;
 }
 
-function temSobreposicao(estrutura) {
-    for (const row of estrutura)
+// Accepts a full layout object (either grid or legacy row format).
+function temSobreposicao(layout) {
+    if (!layout) return false;
+    if (layout.grid) return layout.grid.cards.some(c => c.t === 'overlap');
+    for (const row of layout.estrutura)
         for (const item of row)
             if (Array.isArray(item) && item.length === 4) return true;
     return false;

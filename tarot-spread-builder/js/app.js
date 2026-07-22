@@ -150,7 +150,7 @@ function renderSpreadGrid() {
         const isFeat = numId === Number(featId);
         const isFav = favIds.includes(numId);
         const isCustom = numId < 0;
-        const hasOverlap = temSobreposicao(layout.estrutura);
+        const hasOverlap = temSobreposicao(layout);
         const isSelected = numId === Number(state.selectedLayoutId);
 
         const card = document.createElement('div');
@@ -170,7 +170,7 @@ function renderSpreadGrid() {
                 <span class="spread-badge">${numCartas} cartas</span>
                 ${ovlpBadge}${customBadge}
             </div>
-            ${buildSpreadPreview(layout.estrutura)}`;
+            ${buildSpreadPreview(layout)}`;
         if (selStyle) card.style.cssText = selStyle;
 
         card.onclick = () => selectSpread(numId);
@@ -443,10 +443,10 @@ function confirmCards() {
     });
 
     showScreen('screen-result');
-    renderResultCanvas(cartasSelecionadas, deck, layout.estrutura);
+    renderResultCanvas(cartasSelecionadas, deck, layout);
 }
 
-async function renderResultCanvas(cartas, deck, estrutura) {
+async function renderResultCanvas(cartas, deck, layout) {
     const canvas  = document.getElementById('result-canvas');
     const loading = document.getElementById('result-loading');
     const actions = document.getElementById('result-actions');
@@ -456,7 +456,11 @@ async function renderResultCanvas(cartas, deck, estrutura) {
     canvas.style.display   = 'none';
 
     const transp = settings.transpBackground;
-    await renderLayout(cartas, deck.dir, deck.ext, estrutura, canvas, transp);
+    if (layout.grid) {
+        await renderLayoutGrid(cartas, deck.dir, deck.ext, layout.grid, canvas, transp);
+    } else {
+        await renderLayout(cartas, deck.dir, deck.ext, layout.estrutura, canvas, transp);
+    }
 
     loading.style.display  = 'none';
     canvas.style.display   = 'block';
@@ -533,7 +537,7 @@ function renderSpreadsList() {
     for (const [id, layout] of Object.entries(allLayouts)) {
         const numId = Number(id);
         const numCartas  = contarCartasLayout(numId);
-        const hasOverlap = temSobreposicao(layout.estrutura);
+        const hasOverlap = temSobreposicao(layout);
         const isCustom   = numId < 0;
         const isFav      = favIds.includes(numId);
 
@@ -541,7 +545,7 @@ function renderSpreadsList() {
         item.className = 'spread-item' + (isFav ? ' is-fav' : '');
 
         item.innerHTML = `
-            <div class="siv">${buildSiv(layout.estrutura)}</div>
+            <div class="siv">${buildSiv(layout)}</div>
             <div class="spread-item-info">
                 <div class="spread-item-name">${layout.nome}</div>
                 <div class="spread-item-tags">
@@ -578,13 +582,24 @@ function removeSpread(id) {
 
 // ── Spread Editor ──────────────────────────────────────────────────────────────
 
+// The editor works on a fine grid whose cell is half a card in BOTH axes, so a
+// card occupies a 2×2 block. Position on this grid is the ONLY thing that places
+// a card — half-column and half-row offsets are identical gestures, no special
+// nudge tool. State mirrors the stored grid format: { cols, rows, cards:[{r,c,t}] }.
 let editorState = {
-    id:       null,
-    name:     '',
-    grid:     [],     // 2D: null | 'card' | 'overlap'
-    tool:     'card',
-    history:  []
+    id:      null,
+    name:    '',
+    cols:    6,        // fine columns (each = 0.5 card width);  a card spans 2
+    rows:    6,        // fine rows    (each = 0.5 card height); a card spans 2
+    cards:   [],       // [{ r, c, t }]  r,c = top-left fine cell; t: 'card'|'overlap'
+    tool:    'card',
+    history: []
 };
+
+// On-screen size of one fine cell (half a card). 2 cells = one card (40×68 ≈ the
+// card aspect ratio used by the renderer).
+const EDITOR_CELL_W = 20;
+const EDITOR_CELL_H = 34;
 
 function openEditor(id) {
     editorState.id = id;
@@ -593,12 +608,18 @@ function openEditor(id) {
     const allLayouts = getAllLayouts();
     if (id !== null && allLayouts[id]) {
         editorState.name = allLayouts[id].nome;
-        editorState.grid = layoutToEditorGrid(allLayouts[id].estrutura);
+        const g = allLayouts[id].grid
+            ? deepCopyGrid(allLayouts[id].grid)
+            : estruturaToGridModel(allLayouts[id].estrutura);
+        editorState.cols  = g.cols;
+        editorState.rows  = g.rows;
+        editorState.cards = g.cards;
         document.getElementById('editor-title').textContent = 'Editar Spread';
     } else {
-        editorState.name = '';
-        // Fine grid: 6 half-cells wide = 3 card-widths, 3 rows
-        editorState.grid = Array.from({length: 3}, () => Array(6).fill(null));
+        editorState.name  = '';
+        editorState.cols  = 6;   // 3×3 cards of working space
+        editorState.rows  = 6;
+        editorState.cards = [];
         document.getElementById('editor-title').textContent = 'Novo Spread';
     }
 
@@ -612,24 +633,57 @@ function closeEditor() {
     document.getElementById('editor-overlay').classList.remove('open');
 }
 
-// Vertical half-step: cards can be nudged up/down by half a card height,
-// mirroring the half-cell (half-column) granularity already available horizontally.
-const HALF_STEP_DY = CARD_HEIGHT / 2;
-const DY_OF        = { card: 0, 'card+': 1, 'card-': -1 };
-const MARKER_OF_DY = { '0': 'card', '1': 'card+', '-1': 'card-' };
-
-function isAnchorCell(cell) {
-    return cell === 'card' || cell === 'card+' || cell === 'card-' || cell === 'overlap';
+function deepCopyGrid(grid) {
+    return {
+        cols:  grid.cols,
+        rows:  grid.rows,
+        cards: grid.cards.map(c => ({ r: c.r, c: c.c, t: c.t }))
+    };
 }
 
-// Convert layout format → fine grid (each cell = 0.5 card widths; cards span 2 cells)
-function layoutToEditorGrid(estrutura) {
+// Convert a legacy row `estrutura` (built-ins and older custom spreads) into the
+// fine grid model, so they can be opened in the new editor. Reuses the existing
+// half-column decomposition; each estrutura row maps to 2 fine rows, and a card
+// with a positive/negative dy (old vertical nudge) lands one fine row down/up —
+// exactly the half-step it always meant.
+function estruturaToGridModel(estrutura) {
+    const fine = legacyEstruturaToFineRows(estrutura);
+    const cards = [];
+    let maxC = 0;
+    fine.forEach((row, ri) => {
+        maxC = Math.max(maxC, row.length);
+        row.forEach((cell, ci) => {
+            const R = ri * 2;
+            if      (cell === 'card')    cards.push({ r: R,     c: ci, t: 'card' });
+            else if (cell === 'card+')   cards.push({ r: R + 1, c: ci, t: 'card' });
+            else if (cell === 'card-')   cards.push({ r: R - 1, c: ci, t: 'card' });
+            else if (cell === 'overlap') cards.push({ r: R,     c: ci, t: 'overlap' });
+        });
+    });
+    // Shift up any negative rows produced by a card- on the first row.
+    let minR = 0;
+    for (const card of cards) minR = Math.min(minR, card.r);
+    if (minR < 0) for (const card of cards) card.r -= minR;
+
+    let rows = 2, cols = Math.max(2, maxC);
+    for (const card of cards) {
+        rows = Math.max(rows, card.r + 2);
+        cols = Math.max(cols, card.c + 2);
+    }
+    if (rows % 2) rows++;
+    if (cols % 2) cols++;
+    return { cols, rows, cards };
+}
+
+// Decompose a row `estrutura` into fine (half-column) marker rows. Markers:
+// 'card' | 'card+' (dy>0) | 'card-' (dy<0) | 'overlap' | '_' (card right half) | null.
+function legacyEstruturaToFineRows(estrutura) {
     const fineRows = [];
     for (const row of estrutura) {
         const fineRow = [];
         for (const item of row) {
             if (item === null) {
-                fineRow.push(null, null);  // full space = 2 half-cells
+                fineRow.push(null, null);
             } else if (Array.isArray(item) && item[0] === 'gap') {
                 const halfCells = Math.max(1, Math.round(item[1] * 2));
                 for (let i = 0; i < halfCells; i++) fineRow.push(null);
@@ -639,163 +693,84 @@ function layoutToEditorGrid(estrutura) {
                 fineRow.push('overlap', '_');
             } else if (Array.isArray(item) && item.length === 2 && typeof item[0] === 'number') {
                 const dy = item[1];
-                const marker = dy > 0 ? 'card+' : dy < 0 ? 'card-' : 'card';
-                fineRow.push(marker, '_');
+                fineRow.push(dy > 0 ? 'card+' : dy < 0 ? 'card-' : 'card', '_');
             } else {
                 fineRow.push(null, null);
             }
         }
         fineRows.push(fineRow);
     }
-    // Centre each row within maxLen using symmetric leading + trailing padding
-    const maxLen = Math.max(...fineRows.map(r => r.length));
+    // Centre each row so the columns line up as they render.
+    const maxLen = Math.max(0, ...fineRows.map(r => r.length));
     for (const row of fineRows) {
         const totalPad = maxLen - row.length;
         const leadPad  = Math.floor(totalPad / 2);
-        const trailPad = totalPad - leadPad;
-        for (let i = 0; i < leadPad;  i++) row.unshift(null);
-        for (let i = 0; i < trailPad; i++) row.push(null);
+        for (let i = 0; i < leadPad; i++) row.unshift(null);
+        while (row.length < maxLen) row.push(null);
     }
     return fineRows;
-}
-
-// Convert fine grid → layout format
-function editorGridToLayout(grid) {
-    let cardIndex = 0;
-    const estrutura = [];
-    for (const row of grid) {
-        const layoutRow = [];
-        let i = 0;
-        while (i < row.length) {
-            const cell = row[i];
-            if (cell === null) {
-                let count = 0;
-                while (i < row.length && row[i] === null) { count++; i++; }
-                const fullGaps = Math.floor(count / 2);
-                const halfRem  = count % 2;
-                for (let g = 0; g < fullGaps; g++) layoutRow.push(null);
-                if (halfRem) layoutRow.push(['gap', 0.5]);
-            } else if (cell === 'card' || cell === 'card+' || cell === 'card-') {
-                const dy = DY_OF[cell] * HALF_STEP_DY;
-                layoutRow.push(dy === 0 ? cardIndex++ : [cardIndex++, dy]);
-                i++;
-                if (i < row.length && row[i] === '_') i++;
-            } else if (cell === 'overlap') {
-                layoutRow.push([cardIndex++, cardIndex++, 120, 80]);
-                i++;
-                if (i < row.length && row[i] === '_') i++;
-            } else {
-                i++; // skip stray '_'
-            }
-        }
-        if (layoutRow.some(x => x !== null)) estrutura.push(layoutRow);
-    }
-    return estrutura;
 }
 
 function renderEditorGrid() {
     const container = document.getElementById('editor-grid');
     container.innerHTML = '';
+    container.style.width  = (editorState.cols * EDITOR_CELL_W) + 'px';
+    container.style.height = (editorState.rows * EDITOR_CELL_H) + 'px';
 
-    editorState.grid.forEach((row, ri) => {
-        const rowEl = document.createElement('div');
-        rowEl.className = 'editor-row';
-        row.forEach((cell, ci) => {
-            const cellEl = document.createElement('div');
-            cellEl.className = 'editor-cell';
-            if (cell === 'card' || cell === 'card+' || cell === 'card-') {
-                cellEl.classList.add('c-card', 'c-card-l');
-                if (cell === 'card+') cellEl.classList.add('c-nudge-down');
-                if (cell === 'card-') cellEl.classList.add('c-nudge-up');
-                cellEl.textContent = getCardIndex(ri, ci);
-            } else if (cell === '_') {
-                cellEl.classList.add('c-card', 'c-card-r');
-                const anchor = ci > 0 ? row[ci - 1] : null;
-                if (anchor === 'card+') cellEl.classList.add('c-nudge-down');
-                if (anchor === 'card-') cellEl.classList.add('c-nudge-up');
-            } else if (cell === 'overlap') {
-                cellEl.classList.add('c-card', 'c-ovlp', 'c-card-l');
-                cellEl.textContent = getCardIndex(ri, ci);
-            }
-            cellEl.onclick = () => applyCellTool(ri, ci);
-            rowEl.appendChild(cellEl);
-        });
-        container.appendChild(rowEl);
-    });
-}
-
-function getCardIndex(row, col) {
-    let idx = 1;
-    for (let r = 0; r < editorState.grid.length; r++) {
-        for (let c = 0; c < editorState.grid[r].length; c++) {
-            const cell = editorState.grid[r][c];
-            if (isAnchorCell(cell)) {
-                if (r === row && c === col) return idx;
-                idx += (cell === 'overlap') ? 2 : 1;
-            }
+    // Background fine cells — click targets for placing a card in empty space.
+    for (let r = 0; r < editorState.rows; r++) {
+        for (let c = 0; c < editorState.cols; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'editor-fcell';
+            cell.style.left   = (c * EDITOR_CELL_W) + 'px';
+            cell.style.top    = (r * EDITOR_CELL_H) + 'px';
+            cell.style.width  = EDITOR_CELL_W + 'px';
+            cell.style.height = EDITOR_CELL_H + 'px';
+            cell.onclick = () => editorCellClick(r, c);
+            container.appendChild(cell);
         }
     }
-    return '?';
+
+    // Placed cards — absolutely positioned 2×2 blocks, so half-step offsets and
+    // overlaps show exactly where they are.
+    const order = editorState.cards.slice().sort((a, b) => (a.r - b.r) || (a.c - b.c));
+    let idx = 0;
+    for (const card of order) {
+        const el = document.createElement('div');
+        el.className = 'editor-pcard' + (card.t === 'overlap' ? ' ovlp' : '');
+        el.style.left   = (card.c * EDITOR_CELL_W) + 'px';
+        el.style.top    = (card.r * EDITOR_CELL_H) + 'px';
+        el.style.width  = (2 * EDITOR_CELL_W) + 'px';
+        el.style.height = (2 * EDITOR_CELL_H) + 'px';
+        el.textContent  = idx + 1;
+        idx += (card.t === 'overlap') ? 2 : 1;
+        el.onclick = (e) => { e.stopPropagation(); editorCardClick(card); };
+        container.appendChild(el);
+    }
 }
 
-function applyCellTool(r, c) {
+function editorCellClick(r, c) {
+    const tool = editorState.tool;
+    if (tool !== 'card' && tool !== 'overlap') return;  // erase on empty = nothing
     pushHistory();
-    const tool  = editorState.tool;
-    const grid  = editorState.grid;
-    const cell  = grid[r][c];
+    // Clamp so the 2×2 footprint always fits inside the grid.
+    const R = Math.max(0, Math.min(r, editorState.rows - 2));
+    const C = Math.max(0, Math.min(c, editorState.cols - 2));
+    editorState.cards.push({ r: R, c: C, t: tool });
+    renderEditorGrid();
+}
 
-    if (tool === 'card' || tool === 'overlap') {
-        const marker = (tool === 'overlap') ? 'overlap' : 'card';
-        if (cell === '_') {
-            // Clicked right-half: erase the whole card
-            if (c > 0 && isAnchorCell(grid[r][c-1])) grid[r][c-1] = null;
-            grid[r][c] = null;
-        } else if (isAnchorCell(cell)) {
-            // Toggle off
-            grid[r][c] = null;
-            if (c + 1 < grid[r].length && grid[r][c+1] === '_') grid[r][c+1] = null;
-        } else {
-            // Place card (spans this cell + next)
-            grid[r][c] = marker;
-            if (c + 1 < grid[r].length) {
-                // Clear whatever was in next cell first
-                if (isAnchorCell(grid[r][c+1])) {
-                    if (c + 2 < grid[r].length && grid[r][c+2] === '_') grid[r][c+2] = null;
-                }
-                grid[r][c+1] = '_';
-            }
-        }
-    } else if (tool === 'nudge-up' || tool === 'nudge-down') {
-        // Half-row vertical nudge — the vertical counterpart of half-column placement
-        let ac = c;
-        if (cell === '_' && c > 0 && isAnchorCell(grid[r][c-1])) ac = c - 1;
-        const anchor = grid[r][ac];
-        if (!(anchor in DY_OF)) {
-            showToast('Meio-passo vertical só se aplica a cartas simples');
-        } else {
-            let dy = DY_OF[anchor] + (tool === 'nudge-down' ? 1 : -1);
-            dy = Math.max(-1, Math.min(1, dy));
-            grid[r][ac] = MARKER_OF_DY[dy];
-        }
-    } else {
-        // erase / empty
-        if (cell === '_') {
-            if (c > 0 && isAnchorCell(grid[r][c-1])) grid[r][c-1] = null;
-        } else if (isAnchorCell(cell)) {
-            if (c + 1 < grid[r].length && grid[r][c+1] === '_') grid[r][c+1] = null;
-        }
-        grid[r][c] = null;
-    }
+function editorCardClick(card) {
+    // Any tool removes the clicked card (card/overlap toggle it off; erase deletes).
+    pushHistory();
+    editorState.cards = editorState.cards.filter(x => x !== card);
     renderEditorGrid();
 }
 
 const TOOL_HINTS = {
-    card:         'Carta — ocupa 1 posição',
-    empty:        'Vazio — espaço sem carta',
-    overlap:      'Sobreposição — 2 cartas: frente + cruzada (usa 2 cartas do spread)',
-    erase:        'Apagar — remove carta ou vazio',
-    'nudge-up':   'Meio-passo ↑ — clique numa carta para deslocá-la meia linha para cima',
-    'nudge-down': 'Meio-passo ↓ — clique numa carta para deslocá-la meia linha para baixo'
+    card:    'Carta — clique na grade para posicionar (ocupa 2×2 meias-células)',
+    overlap: 'Sobreposição — 2 cartas: frente + cruzada (usa 2 cartas do spread)',
+    erase:   'Apagar — clique numa carta para removê-la'
 };
 
 function selectTool(tool) {
@@ -807,40 +782,51 @@ function selectTool(tool) {
 
 function editorAddRow() {
     pushHistory();
-    const cols = editorState.grid[0] ? editorState.grid[0].length : 6;
-    editorState.grid.push(Array(cols).fill(null));
+    editorState.rows += 2;   // one card height
     renderEditorGrid();
 }
 
 function editorDelRow() {
-    if (editorState.grid.length <= 1) return;
+    if (editorState.rows <= 2) return;
     pushHistory();
-    editorState.grid.pop();
+    editorState.rows -= 2;
+    editorState.cards = editorState.cards.filter(c => c.r + 2 <= editorState.rows);
     renderEditorGrid();
 }
 
 function editorAddCol() {
     pushHistory();
-    // Add 2 half-cells = 1 card-width
-    editorState.grid.forEach(row => row.push(null, null));
+    editorState.cols += 2;   // one card width
     renderEditorGrid();
 }
 
 function editorDelCol() {
-    if (!editorState.grid[0] || editorState.grid[0].length <= 2) return;
+    if (editorState.cols <= 2) return;
     pushHistory();
-    editorState.grid.forEach(row => row.splice(row.length - 2, 2));
+    editorState.cols -= 2;
+    editorState.cards = editorState.cards.filter(c => c.c + 2 <= editorState.cols);
     renderEditorGrid();
+}
+
+function editorSnapshot() {
+    return {
+        cols:  editorState.cols,
+        rows:  editorState.rows,
+        cards: editorState.cards.map(c => ({ r: c.r, c: c.c, t: c.t }))
+    };
 }
 
 function editorUndo() {
     if (!editorState.history.length) return;
-    editorState.grid = editorState.history.pop();
+    const snap = editorState.history.pop();
+    editorState.cols  = snap.cols;
+    editorState.rows  = snap.rows;
+    editorState.cards = snap.cards;
     renderEditorGrid();
 }
 
 function pushHistory() {
-    editorState.history.push(JSON.parse(JSON.stringify(editorState.grid)));
+    editorState.history.push(editorSnapshot());
     if (editorState.history.length > 30) editorState.history.shift();
 }
 
@@ -848,8 +834,7 @@ function saveEditor() {
     const name = document.getElementById('editor-name').value.trim();
     if (!name) { showToast('Digite um nome para o spread'); return; }
 
-    const estrutura = editorGridToLayout(editorState.grid);
-    if (!estrutura.length || estrutura.every(r => r.every(x => x === null))) {
+    if (!editorState.cards.length) {
         showToast('O spread não pode ser vazio');
         return;
     }
@@ -858,7 +843,7 @@ function saveEditor() {
         ? editorState.id    // edit existing custom
         : getNextCustomId(); // new custom
 
-    saveSpread(id, { nome: name, estrutura });
+    saveSpread(id, { nome: name, grid: editorSnapshot() });
     closeEditor();
     showToast('Spread salvo');
     renderSpreadsList();
@@ -1152,7 +1137,27 @@ function showToast(msg) {
 
 // ── Spread visual preview (home grid) ─────────────────────────────────────────
 
-function buildSpreadPreview(estrutura) {
+// Absolute mini-layout for a grid-format spread (used by both previews). Each
+// fine cell renders at `unit` px; a card is a 2×2 block placed by its position,
+// so half-steps and overlaps show faithfully.
+function buildGridMiniAbs(grid, unit) {
+    const b = gridBounds(grid);
+    const W = (b.maxC - b.minC) * unit;
+    const H = (b.maxR - b.minR) * unit;
+    let html = `<div class="prev-abs" style="width:${W}px;height:${H}px">`;
+    for (const card of gridCardOrder(grid.cards)) {
+        const x = (card.c - b.minC) * unit;
+        const y = (card.r - b.minR) * unit;
+        const cls = card.t === 'overlap' ? 'prev-card over' : 'prev-card';
+        html += `<div class="${cls}" style="left:${x}px;top:${y}px;width:${2 * unit - 1}px;height:${2 * unit - 1}px"></div>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+function buildSpreadPreview(layout) {
+    if (layout.grid) return `<div class="spread-preview">${buildGridMiniAbs(layout.grid, 7)}</div>`;
+    const estrutura = layout.estrutura;
     // Limit to 5 rows, 9 cols for preview
     const rows = estrutura.slice(0, 5);
     const maxCols = Math.min(9, Math.max(...rows.map(r => r.length)));
@@ -1185,7 +1190,9 @@ function buildSpreadPreview(estrutura) {
 
 // ── SIV (spread item visual in list) ──────────────────────────────────────────
 
-function buildSiv(estrutura) {
+function buildSiv(layout) {
+    if (layout.grid) return buildGridMiniAbs(layout.grid, 5);
+    const estrutura = layout.estrutura;
     const rows = estrutura.slice(0, 4);
     const maxCols = Math.min(5, Math.max(...rows.map(r => r.length)));
     let html = '';

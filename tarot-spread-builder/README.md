@@ -43,14 +43,27 @@ under `tarot-spread-builder/**`, producing a debug APK as a workflow artifact
 assembleDebug` (requires an Android SDK; `ANDROID_HOME`/`local.properties` set
 up as usual).
 
-## Spread editor: vertical half-steps
+## Spread editor: fine 2×2 grid (half-steps in both axes)
 
-The spread editor's grid already let you place a card at half-column
-resolution horizontally. It had no equivalent for the vertical axis — a card
-could only sit flush on its row.
+The editor works on a **fine grid whose cell is half a card in both
+dimensions**, so a card occupies a **2×2 block** of cells and always stays the
+same size. Placing a card at a half-column *or* half-row offset is the same
+gesture — just anchor its block one fine cell over or down. There is no special
+"nudge": half-step positioning falls out of the grid itself, symmetrically on
+both axes.
 
-Two new tools, **½ Cima** and **½ Baixo**, nudge an already-placed card up or
-down by half a card height (capped to one half-step in either direction).
-Nudged cards are marked in the editor with a small vertical offset and a gold
-outline, and serialize using the existing `[cardIndex, dy]` layout format that
-the renderer already supported but the editor never wrote.
+Tools are just **Carta** (place a card), **Sobrepost.** (an overlap slot: front
++ crossed back, consuming two of the spread's cards), and **Apagar** (remove).
+`+ Linha`/`+ Coluna` grow the workspace by one card unit (two fine cells).
+
+Custom spreads are stored in a grid format:
+
+```js
+{ nome, grid: { cols, rows, cards: [ { r, c, t } ] } }   // r,c in half-card cells; t: 'card'|'overlap'
+```
+
+The 20 built-in spreads keep the legacy row `estrutura` format and render
+through the original row renderer. Opening a built-in (or an older custom
+spread saved before this change) in the editor converts it into the grid model
+on the fly — a card that carried a vertical `dy` offset simply lands on the
+corresponding half-row.

@@ -291,6 +291,14 @@ body::before {
 .prev-card.gold  { background: linear-gradient(160deg, var(--gold-dim) 0%, #2a1a04 100%); border-color: rgba(201,168,76,.5); }
 .prev-card.over  { margin-left: -4px; background: linear-gradient(160deg, var(--crimson) 0%, #3d0a1a 100%); border-color: rgba(139,32,64,.4); }
 .prev-empty      { width: 11px; height: 17px; visibility: hidden; flex-shrink: 0; }
+/* Absolute mini-layout for grid-format spreads (half-step faithful). */
+.prev-abs { position: relative; margin: 0 auto; }
+.prev-abs .prev-card {
+    position: absolute; box-sizing: border-box; width: auto; height: auto;
+    border-radius: 2px; background: linear-gradient(160deg, var(--violet) 0%, #2d1550 100%);
+    border: 1px solid rgba(155,111,208,.5);
+}
+.prev-abs .prev-card.over { margin: 0; background: linear-gradient(160deg, var(--crimson) 0%, #3d0a1a 100%); border-color: rgba(139,32,64,.6); }
 
 .quick-config {
     display: flex; gap: 8px; padding: 8px 16px 4px;
@@ -527,23 +535,39 @@ details[open] .result-summary::before { transform: rotate(90deg); }
 .editor-name-input::placeholder { color: var(--text-dim); }
 .editor-content { flex: 1; overflow: auto; padding: 10px 16px; scrollbar-width: none; display: flex; flex-direction: column; align-items: flex-start; }
 .editor-content::-webkit-scrollbar { display: none; }
-.editor-grid { display: inline-flex; flex-direction: column; gap: 4px; min-width: max-content; }
-.editor-row { display: flex; gap: 0; align-items: center; }
-.editor-cell {
-    width: 18px; height: 54px; border-radius: 5px;
-    border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-family: var(--font-mono); font-size: 9px; color: var(--border);
-    flex-shrink: 0; transition: border-color .1s, background .1s; position: relative;
-    -webkit-tap-highlight-color: transparent; margin-right: 3px;
+/* Fine 2×2 grid: cells are half a card in both axes; cards are absolutely
+   positioned 2×2 blocks so half-column and half-row offsets look identical. */
+.editor-grid { position: relative; min-width: max-content; -webkit-tap-highlight-color: transparent; }
+.editor-fcell {
+    position: absolute; box-sizing: border-box;
+    border: 1px dashed rgba(155,111,208,.14);
+    cursor: pointer;
 }
-.editor-cell:active { border-color: var(--gold-dim); }
-.editor-cell.c-card { background: linear-gradient(160deg, var(--violet), #2d1550); border: 1px solid rgba(155,111,208,.55); color: rgba(155,111,208,.7); }
-.editor-cell.c-card-l { border-radius: 5px 0 0 5px; margin-right: 0; }
-.editor-cell.c-card-r { border-radius: 0 5px 5px 0; border-left: 1px solid rgba(155,111,208,.2); margin-right: 3px; }
-.editor-cell.c-ovlp.c-card-l::after { content: ''; position: absolute; top: 6px; left: 4px; width: 12px; height: 40px; border-radius: 2px; background: linear-gradient(160deg, var(--crimson), #3d0a1a); border: 1px solid rgba(139,32,64,.6); transform: rotate(8deg); z-index: 2; }
-.editor-cell.c-nudge-up   { transform: translateY(-9px); box-shadow: 0 0 0 1px var(--gold-dim); z-index: 1; }
-.editor-cell.c-nudge-down { transform: translateY(9px);  box-shadow: 0 0 0 1px var(--gold-dim); z-index: 1; }
+.editor-fcell:active { border-color: var(--gold-dim); background: rgba(201,168,76,.06); }
+.editor-pcard {
+    position: absolute; box-sizing: border-box; border-radius: 5px;
+    background: linear-gradient(160deg, rgba(107,63,160,.82), rgba(45,21,80,.82));
+    border: 1px solid rgba(155,111,208,.65);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 12px; color: rgba(240,232,208,.85);
+    cursor: pointer; z-index: 2;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    transition: transform .08s;
+}
+.editor-pcard:active { transform: scale(.96); }
+.editor-pcard.ovlp {
+    background: linear-gradient(160deg, rgba(139,32,64,.82), rgba(61,10,26,.82));
+    border-color: rgba(139,32,64,.7);
+}
+/* crossed-card badge for overlap slots */
+.editor-pcard.ovlp::after {
+    content: ''; position: absolute; top: 6px; right: 6px;
+    width: 14px; height: 20px; border-radius: 2px;
+    background: linear-gradient(160deg, var(--crimson), #3d0a1a);
+    border: 1px solid rgba(201,168,76,.5); transform: rotate(12deg);
+}
 .editor-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px 16px 6px; flex-shrink: 0; }
+.editor-tools.editor-tools-3 { grid-template-columns: repeat(3, 1fr); }
 .tool-btn { background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 4px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; transition: border-color .1s; -webkit-tap-highlight-color: transparent; }
 .tool-btn .t-icon { font-size: 17px; line-height: 1; }
 .tool-btn .t-label { font-family: var(--font-head); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
