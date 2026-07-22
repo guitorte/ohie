@@ -396,6 +396,13 @@
                     <div class="arcana-opt" id="new-deck-type-oracle" onclick="setNewDeckType('oracle')">Oracular</div>
                 </div>
             </div>
+            <div class="form-field" id="new-deck-count-field" style="display:none">
+                <div class="form-label">Número de Cartas</div>
+                <input type="number" class="form-input" id="new-deck-count" placeholder="36" value="36" min="1" max="99">
+                <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">
+                    Os arquivos de imagem devem se chamar <b>01</b>, <b>02</b> … até o número de cartas, com a extensão acima (ex: 01.jpg, 02.jpg…).
+                </div>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" onclick="closeModal('modal-deck')" style="flex:1">Cancelar</button>

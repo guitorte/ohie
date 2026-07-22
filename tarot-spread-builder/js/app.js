@@ -1046,28 +1046,68 @@ function setNewDeckType(type) {
     newDeckType = type;
     document.getElementById('new-deck-type-tarot').classList.toggle('active', type === 'tarot');
     document.getElementById('new-deck-type-oracle').classList.toggle('active', type === 'oracle');
+    const countField = document.getElementById('new-deck-count-field');
+    if (countField) countField.style.display = (type === 'oracle') ? 'block' : 'none';
 }
 
 function openAddDeckModal() {
     document.getElementById('new-deck-nome').value  = '';
     document.getElementById('new-deck-dir').value   = '';
     document.getElementById('new-deck-ext').value   = '.jpg';
+    document.getElementById('new-deck-count').value = '36';
     setNewDeckType('tarot');
     openModal('modal-deck');
 }
 
-function confirmAddDeck() {
+// Generates zero-padded sequential filenames ("01", "02", …) for a generic
+// oracle deck — independent of the Lenormand-specific names in UIDS_LENORMAND,
+// which only match the app's own bundled Lenormand artwork.
+function buildOracleUids(count) {
+    const uids = [];
+    for (let i = 1; i <= count; i++) uids.push(String(i).padStart(2, '0'));
+    return uids;
+}
+
+// Ensures the extension always has a leading dot, so "jpg" doesn't silently
+// produce filenames like "01jpg" that never match any real image on disk.
+function normalizeExt(ext) {
+    return ext.startsWith('.') ? ext : '.' + ext;
+}
+
+async function confirmAddDeck() {
     const nome = document.getElementById('new-deck-nome').value.trim();
-    const dir  = document.getElementById('new-deck-dir').value.trim();
-    const ext  = document.getElementById('new-deck-ext').value.trim() || '.jpg';
+    const dir  = document.getElementById('new-deck-dir').value.trim().replace(/\/+$/, '');
+    const ext  = normalizeExt(document.getElementById('new-deck-ext').value.trim() || '.jpg');
 
     if (!nome || !dir) { showToast('Preencha nome e diretório'); return; }
 
-    const id  = 'custom_' + Date.now();
     const isT = (newDeckType === 'tarot');
+    let uidsBase;
+    if (isT) {
+        uidsBase = UIDS_BASE;
+    } else {
+        const count = Math.max(1, Math.min(99, parseInt(document.getElementById('new-deck-count').value, 10) || 36));
+        uidsBase = buildOracleUids(count);
+    }
+
+    // Verify the images actually exist at this path before saving — a wrong
+    // directory/extension otherwise saves silently and only shows up later as
+    // a blank/black generated spread with no indication of what went wrong.
+    showToast('Verificando imagens…');
+    const [firstOk, lastOk] = await Promise.all([
+        loadImage(dir + '/' + uidsBase[0] + ext),
+        loadImage(dir + '/' + uidsBase[uidsBase.length - 1] + ext)
+    ]);
+    if (!firstOk || !lastOk) {
+        const badPath = !firstOk ? (dir + '/' + uidsBase[0] + ext) : (dir + '/' + uidsBase[uidsBase.length - 1] + ext);
+        showToast('Imagem não encontrada: ' + badPath);
+        return;
+    }
+
+    const id  = 'custom_' + Date.now();
     const deck = {
         id, nome, nomeCompleto: nome, dir, ext,
-        uidsBase:  isT ? UIDS_BASE : UIDS_LENORMAND,
+        uidsBase,
         uidsMajors: isT ? UIDS_MAJORS : null,
         hasMajors: isT,
         color: '#9b6fd0'
