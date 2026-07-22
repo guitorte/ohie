@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+app/build/
+build/
+
+# Generated at build time from the sibling web app (index.html, css/, js/, decks/) —
+# not duplicated in git, see app/build.gradle.kts:copyWebAssets.
+app/src/main/assets/

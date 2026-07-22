@@ -23,6 +23,26 @@ Then visit `http://localhost:8080/`.
 - `js/engine.js`, `js/renderer.js` — shuffle/draw logic and canvas rendering of a spread
 - `decks/` — card artwork for the built-in decks (Lenormand, Rider-Waite-Smith, Tarot de Marseille)
 
+## Android build
+
+`android/` is a minimal Gradle/Kotlin wrapper that reconstructs the original
+app's shell: a single `MainActivity` hosting a `WebView` pointed at
+`file:///android_asset/www/index.html`, plus the `Android.saveImage(dataUrl,
+filename)` JS bridge that `js/app.js` already calls to save an exported spread
+to the gallery. The original app's compiled APK didn't include buildable
+source, only the `assets/www` bundle above, so this wrapper is reconstructed
+(package `com.tarot.app`, same bridge interface) rather than recovered.
+
+The web app (`index.html`, `css/`, `js/`, `decks/`) is copied into
+`android/app/src/main/assets/www` at build time (see
+`android/app/build.gradle.kts:copyWebAssets`) — it isn't duplicated in git.
+
+Builds automatically via `.github/workflows/arcanum-android.yml` on any push
+under `tarot-spread-builder/**`, producing a debug APK as a workflow artifact
+(`arcanum-debug-apk`). To build locally: `cd android && ./gradlew
+assembleDebug` (requires an Android SDK; `ANDROID_HOME`/`local.properties` set
+up as usual).
+
 ## Spread editor: vertical half-steps
 
 The spread editor's grid already let you place a card at half-column
