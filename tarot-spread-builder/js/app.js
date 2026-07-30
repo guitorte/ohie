@@ -479,7 +479,11 @@ function saveImage() {
         const transp = settings.transpBackground;
         dataUrl = canvasToDataURL(canvas, 0.95, transp);
     } catch (e) {
-        showToast('Erro ao gerar imagem');
+        // Almost always a tainted-canvas SecurityError: card art loaded from
+        // file:// makes the canvas non-exportable unless the WebView grants
+        // file-URL access (see MainActivity). Surface the error name so the
+        // cause isn't hidden behind a generic message.
+        showToast('Erro ao gerar imagem' + (e && e.name ? ' (' + e.name + ')' : ''));
         return;
     }
 
@@ -507,6 +511,9 @@ function shareImage() {
 
     const transp = settings.transpBackground;
     canvasToBlob(canvas, 0.95, transp).then(async blob => {
+        // A tainted canvas resolves toBlob with null — fall back to the save
+        // path, which reports the underlying error clearly.
+        if (!blob) { saveImage(); return; }
         const ext  = transp ? 'png' : 'jpg';
         const mime = transp ? 'image/png' : 'image/jpeg';
         const file = new File([blob], `arcanum-resultado.${ext}`, { type: mime });

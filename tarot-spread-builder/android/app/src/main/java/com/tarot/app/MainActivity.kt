@@ -28,6 +28,18 @@ class MainActivity : Activity() {
         val webView = WebView(this)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        // The card art loads from file:///android_asset/... and is drawn onto a
+        // <canvas>. Without file-URL access the canvas is treated as
+        // cross-origin ("tainted"), so canvas.toDataURL()/toBlob() throw a
+        // SecurityError and saving/sharing a spread fails with "erro ao gerar
+        // imagem". These flags let the file:// page read its own file:// assets
+        // so the export works. The app is fully offline with no remote content,
+        // so the widened access carries no practical risk here.
+        webView.settings.allowFileAccess = true
+        @Suppress("DEPRECATION")
+        webView.settings.allowFileAccessFromFileURLs = true
+        @Suppress("DEPRECATION")
+        webView.settings.allowUniversalAccessFromFileURLs = true
         webView.webViewClient = WebViewClient()
         webView.addJavascriptInterface(AndroidBridge(this), "Android")
         setContentView(webView)
