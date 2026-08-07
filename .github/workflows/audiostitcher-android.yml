@@ -1,0 +1,54 @@
+name: AudioStitcher Android CI
+on:
+  push:
+    branches: [ main, 'claude/audiostitcher-apk-github-actions-7r3s00' ]
+    paths: [ 'audiostitcher/**', '.github/workflows/audiostitcher-android.yml' ]
+  pull_request:
+    paths: [ 'audiostitcher/**', '.github/workflows/audiostitcher-android.yml' ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: audiostitcher } }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Generate debug keystore
+        # The project pins a custom debug signingConfig that reads
+        # ${rootDir}/debug.keystore (store/key pass "android", alias
+        # "androiddebugkey"). It is git-ignored, so create it at build time.
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiostitcher-debug-apk
+          path: audiostitcher/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
