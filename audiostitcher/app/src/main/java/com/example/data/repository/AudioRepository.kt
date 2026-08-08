@@ -165,6 +165,17 @@ class AudioRepository(
         audioDao.deleteClip(clip)
     }
 
+    suspend fun clearClipsForProject(projectId: Long) = withContext(Dispatchers.IO) {
+        val clips = audioDao.getClipsForProjectDirect(projectId)
+        clips.forEach { clip ->
+            val file = File(clip.localFilePath)
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+        audioDao.deleteClipsForProject(projectId)
+    }
+
     suspend fun saveMergedAudioRecord(mergedAudio: MergedAudio): Long = withContext(Dispatchers.IO) {
         audioDao.insertMergedAudio(mergedAudio)
     }

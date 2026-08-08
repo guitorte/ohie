@@ -31,7 +31,7 @@ object AudioMerger {
         clips: List<AudioClip>,
         projectName: String,
         format: ExportFormat = ExportFormat.M4A_AAC,
-        onProgress: (Float) -> Unit = {}
+        onProgress: (progress: Float, currentClip: Int, totalClips: Int, status: String) -> Unit = { _, _, _, _ -> }
     ): MergeResult = withContext(Dispatchers.IO) {
         if (clips.isEmpty()) {
             return@withContext MergeResult.Error("Nenhum áudio selecionado para unificação.")
@@ -85,7 +85,7 @@ object AudioMerger {
     private fun mergeToWav(
         clips: List<AudioClip>,
         outputFile: File,
-        onProgress: (Float) -> Unit
+        onProgress: (progress: Float, currentClip: Int, totalClips: Int, status: String) -> Unit
     ) {
         val rawPcmFile = File(outputFile.parentFile, "temp_${System.currentTimeMillis()}.pcm")
         var targetSampleRate = 44100
@@ -101,19 +101,35 @@ object AudioMerger {
                     val file = File(clip.localFilePath)
                     if (!file.exists()) return@forEachIndexed
 
+                    val currentNum = index + 1
+                    val startProg = (index / totalClips) * 0.8f
+                    onProgress(
+                        startProg,
+                        currentNum,
+                        clips.size,
+                        "Processando áudio $currentNum de ${clips.size}: ${clip.originalFileName}"
+                    )
+
                     val (sampleRate, channels, pcmBytes) = decodeToPcm(file, bufferedOut)
                     if (sampleRate > 0) targetSampleRate = sampleRate
                     if (channels > 0) targetChannels = channels
                     totalPcmBytes += pcmBytes
 
-                    onProgress((index + 1) / totalClips * 0.8f)
+                    val doneProg = (currentNum / totalClips) * 0.8f
+                    onProgress(
+                        doneProg,
+                        currentNum,
+                        clips.size,
+                        "Concluído $currentNum de ${clips.size}"
+                    )
                 }
                 bufferedOut.flush()
             }
 
+            onProgress(0.9f, clips.size, clips.size, "Gerando arquivo WAV final...")
             // Write WAV Header + PCM data to outputFile
             writeWavFile(rawPcmFile, outputFile, targetSampleRate, targetChannels, totalPcmBytes)
-            onProgress(1.0f)
+            onProgress(1.0f, clips.size, clips.size, "Unificação concluída com sucesso!")
         } finally {
             if (rawPcmFile.exists()) {
                 rawPcmFile.delete()
@@ -127,7 +143,7 @@ object AudioMerger {
     private fun mergeToM4a(
         clips: List<AudioClip>,
         outputFile: File,
-        onProgress: (Float) -> Unit
+        onProgress: (progress: Float, currentClip: Int, totalClips: Int, status: String) -> Unit
     ) {
         val targetSampleRate = 44100
         val targetChannels = 1
@@ -156,6 +172,15 @@ object AudioMerger {
             val file = File(clip.localFilePath)
             if (!file.exists()) return@forEachIndexed
 
+            val currentNum = index + 1
+            val startProg = (index / totalClips) * 0.9f
+            onProgress(
+                startProg,
+                currentNum,
+                clips.size,
+                "Processando áudio $currentNum de ${clips.size}: ${clip.originalFileName}"
+            )
+
             decodeAndEncodeClip(
                 file = file,
                 encoder = encoder,
@@ -171,8 +196,16 @@ object AudioMerger {
                 onPtsUpdated = { globalPtsUs = it }
             )
 
-            onProgress((index + 1) / totalClips)
+            val doneProg = (currentNum / totalClips) * 0.9f
+            onProgress(
+                doneProg,
+                currentNum,
+                clips.size,
+                "Concluído $currentNum de ${clips.size}"
+            )
         }
+
+        onProgress(0.95f, clips.size, clips.size, "Finalizando arquivo unificado...")
 
         // Finish encoding EOS
         drainEncoder(encoder, muxer, bufferInfo, audioTrackIndex, muxerStarted, true)
@@ -187,6 +220,8 @@ object AudioMerger {
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping muxer/encoder", e)
         }
+
+        onProgress(1.0f, clips.size, clips.size, "Unificação concluída!")
     }
 
     private fun decodeToPcm(inputFile: File, pcmOutputStream: BufferedOutputStream): Triple<Int, Int, Long> {

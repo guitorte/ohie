@@ -57,6 +57,7 @@ fun MainScreen(
     var folderToRename by remember { mutableStateOf<ProjectWithClips?>(null) }
     var folderToDelete by remember { mutableStateOf<ProjectWithClips?>(null) }
     var showMergeFormatDialog by remember { mutableStateOf(false) }
+    var showClearQueueDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
     var pendingFileToSave by remember { mutableStateOf<File?>(null) }
 
@@ -223,6 +224,7 @@ fun MainScreen(
                     onMoveDown = { clip, clips -> viewModel.moveClipDown(clip, clips) },
                     onDeleteClip = { viewModel.deleteClip(it) },
                     onAddAudioFile = { audioPickerLauncher.launch("audio/*") },
+                    onClearQueueClick = { showClearQueueDialog = true },
                     onMergeClick = { showMergeFormatDialog = true },
                     onChangeFolderClick = { selectedTab = 1 }
                 )
@@ -315,6 +317,37 @@ fun MainScreen(
         }
     )
 
+    // Clear Queue Dialog
+    if (showClearQueueDialog) {
+        val clipCount = activeProjectWithClips?.clips?.size ?: 0
+        val folderName = activeProjectWithClips?.project?.name ?: "Pasta Ativa"
+        AlertDialog(
+            onDismissRequest = { showClearQueueDialog = false },
+            icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Limpar Fila de Áudios?") },
+            text = {
+                Text("Tem certeza de que deseja remover todos os $clipCount áudios da fila da pasta '$folderName'?\n\nTodos os arquivos da fila serão apagados para você começar uma nova unificação do zero.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearActiveQueue()
+                        showClearQueueDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("confirm_clear_queue_btn")
+                ) {
+                    Text("Limpar Fila")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearQueueDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     // Help Dialog
     if (showHelpDialog) {
         AlertDialog(
@@ -376,6 +409,7 @@ fun ActiveFolderTabContent(
     onMoveDown: (AudioClip, List<AudioClip>) -> Unit,
     onDeleteClip: (AudioClip) -> Unit,
     onAddAudioFile: () -> Unit,
+    onClearQueueClick: () -> Unit,
     onMergeClick: () -> Unit,
     onChangeFolderClick: () -> Unit
 ) {
@@ -458,11 +492,22 @@ fun ActiveFolderTabContent(
                             .testTag("add_local_audio_btn")
                     ) {
                         Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Adicionar Áudio", style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Adicionar", style = MaterialTheme.typography.labelMedium)
                     }
 
                     if (clips.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = onClearQueueClick,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.testTag("clear_queue_btn")
+                        ) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "Limpar Fila", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Limpar Fila", style = MaterialTheme.typography.labelMedium)
+                        }
+
                         Button(
                             onClick = onMergeClick,
                             shape = RoundedCornerShape(20.dp),
@@ -471,7 +516,7 @@ fun ActiveFolderTabContent(
                                 .testTag("merge_active_folder_btn")
                         ) {
                             Icon(Icons.Default.Merge, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Unificar (${clips.size})", style = MaterialTheme.typography.labelMedium)
                         }
                     }

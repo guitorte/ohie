@@ -71,6 +71,9 @@ interface AudioDao {
     @Delete
     suspend fun deleteClip(clip: AudioClip)
 
+    @Query("DELETE FROM audio_clips WHERE projectId = :projectId")
+    suspend fun deleteClipsForProject(projectId: Long)
+
     @Query("SELECT * FROM audio_clips WHERE projectId = :projectId ORDER BY orderIndex ASC")
     fun getClipsForProject(projectId: Long): Flow<List<AudioClip>>
 

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -10,8 +11,10 @@ import androidx.compose.material.icons.filled.Merge
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,21 +40,28 @@ fun MergeProgressDialog(
         shape = RoundedCornerShape(20.dp),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = when (mergeState) {
-                        is AudioViewModel.MergeUiState.Processing -> Icons.Default.Merge
-                        is AudioViewModel.MergeUiState.Success -> Icons.Default.CheckCircle
-                        is AudioViewModel.MergeUiState.Error -> Icons.Default.Error
-                        else -> Icons.Default.Merge
-                    },
-                    contentDescription = null,
-                    tint = when (mergeState) {
-                        is AudioViewModel.MergeUiState.Success -> WhatsAppGreen
-                        is AudioViewModel.MergeUiState.Error -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.primary
-                    },
-                    modifier = Modifier.size(28.dp)
-                )
+                if (mergeState is AudioViewModel.MergeUiState.Processing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(26.dp),
+                        strokeWidth = 3.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Icon(
+                        imageVector = when (mergeState) {
+                            is AudioViewModel.MergeUiState.Success -> Icons.Default.CheckCircle
+                            is AudioViewModel.MergeUiState.Error -> Icons.Default.Error
+                            else -> Icons.Default.Merge
+                        },
+                        contentDescription = null,
+                        tint = when (mergeState) {
+                            is AudioViewModel.MergeUiState.Success -> WhatsAppGreen
+                            is AudioViewModel.MergeUiState.Error -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = when (mergeState) {
@@ -73,31 +83,83 @@ fun MergeProgressDialog(
             ) {
                 when (mergeState) {
                     is AudioViewModel.MergeUiState.Processing -> {
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = mergeState.progress,
+                            label = "mergeProgressAnimation"
+                        )
+
                         Text(
-                            text = "Aguarde enquanto os áudios sequenciais são concatenados em um único arquivo...",
+                            text = "Aguarde enquanto os áudios são concatenados e processados em um único arquivo...",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(20.dp))
-                        LinearProgressIndicator(
-                            progress = mergeState.progress,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .testTag("merge_progress_bar")
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "${(mergeState.progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (mergeState.totalClips > 0) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "Áudio ${mergeState.currentClipIndex} de ${mergeState.totalClips}",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(modifier = Modifier.width(1.dp))
+                                    }
+
+                                    Text(
+                                        text = "${(animatedProgress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                LinearProgressIndicator(
+                                    progress = animatedProgress,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(10.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .testTag("merge_progress_bar")
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = mergeState.statusText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     }
 
                     is AudioViewModel.MergeUiState.Success -> {
                         Text(
-                            text = "Os ${mergeState.mergedAudio.clipCount} áudios da pasta foram unificados com sucesso em um único arquivo de áudio!",
+                            text = "Os ${mergeState.mergedAudio.clipCount} áudios da pasta foram unificados com sucesso em um único arquivo!",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center
                         )
@@ -115,6 +177,12 @@ fun MergeProgressDialog(
                                     text = "Duração Total: ${com.example.util.AudioStorageManager.formatDuration(mergeState.mergedAudio.totalDurationMs)}",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "📍 Salvo em: /storage/emulated/0/Music/AudioStitch",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary
                                 )
                             }
                         }
