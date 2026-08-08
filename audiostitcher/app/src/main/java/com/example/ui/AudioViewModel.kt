@@ -144,6 +144,17 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun clearActiveQueue() {
+        val activeProj = activeProjectWithClips.value?.project ?: return
+        viewModelScope.launch {
+            repository.clearClipsForProject(activeProj.id)
+            _importBannerState.value = ImportBanner(
+                message = "✓ Fila da pasta '${activeProj.name}' foi limpa com sucesso.",
+                timestamp = System.currentTimeMillis()
+            )
+        }
+    }
+
     fun mergeActiveFolder(format: AudioMerger.ExportFormat = AudioMerger.ExportFormat.M4A_AAC) {
         val projectWithClips = activeProjectWithClips.value
         if (projectWithClips == null || projectWithClips.clips.isEmpty()) {
@@ -152,25 +163,43 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            _mergeState.value = MergeUiState.Processing(progress = 0f)
+            val clipCount = projectWithClips.clips.size
+            _mergeState.value = MergeUiState.Processing(
+                progress = 0f,
+                currentClipIndex = 0,
+                totalClips = clipCount,
+                statusText = "Iniciando processamento dos $clipCount áudios..."
+            )
 
             val result = AudioMerger.mergeClips(
                 context = getApplication(),
                 clips = projectWithClips.clips,
                 projectName = projectWithClips.project.name,
                 format = format,
-                onProgress = { progress ->
-                    _mergeState.value = MergeUiState.Processing(progress = progress)
+                onProgress = { progress, currentClip, totalClips, status ->
+                    _mergeState.value = MergeUiState.Processing(
+                        progress = progress,
+                        currentClipIndex = currentClip,
+                        totalClips = totalClips,
+                        statusText = status
+                    )
                 }
             )
 
             when (result) {
                 is AudioMerger.MergeResult.Success -> {
+                    // Export copy automatically to /storage/emulated/0/Music/AudioStitch
+                    val exportedFile = com.example.util.AudioStorageManager.exportToPublicMusicFolder(
+                        context = getApplication(),
+                        sourceFile = result.file
+                    )
+                    val finalFilePath = exportedFile?.absolutePath ?: result.file.absolutePath
+
                     val record = MergedAudio(
                         projectId = projectWithClips.project.id,
                         projectName = projectWithClips.project.name,
                         fileName = result.file.name,
-                        filePath = result.file.absolutePath,
+                        filePath = finalFilePath,
                         totalDurationMs = result.totalDurationMs,
                         clipCount = result.clipCount,
                         fileSizeBytes = result.fileSizeBytes
@@ -242,7 +271,12 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
 
     sealed class MergeUiState {
         object Idle : MergeUiState()
-        data class Processing(val progress: Float) : MergeUiState()
+        data class Processing(
+            val progress: Float,
+            val currentClipIndex: Int = 0,
+            val totalClips: Int = 0,
+            val statusText: String = "Processando áudios..."
+        ) : MergeUiState()
         data class Success(val mergedAudio: MergedAudio) : MergeUiState()
         data class Error(val message: String) : MergeUiState()
     }

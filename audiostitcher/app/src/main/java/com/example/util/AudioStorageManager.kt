@@ -1,8 +1,12 @@
 package com.example.util
 
+import android.content.ContentValues
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
@@ -17,6 +21,7 @@ import java.security.MessageDigest
 object AudioStorageManager {
 
     private const val TAG = "AudioStorageManager"
+    const val PUBLIC_EXPORT_PATH = "/storage/emulated/0/Music/AudioStitch"
 
     fun getAudioClipsDir(context: Context): File {
         val dir = File(context.filesDir, "audio_clips")
@@ -138,6 +143,59 @@ object AudioStorageManager {
             mb >= 1.0 -> String.format(Locale.getDefault(), "%.1f MB", mb)
             kb >= 1.0 -> String.format(Locale.getDefault(), "%.0f KB", kb)
             else -> "$bytes B"
+        }
+    }
+
+    /**
+     * Exports an audio file directly to /storage/emulated/0/Music/AudioStitch
+     * and indexes it in MediaStore if available.
+     */
+    fun exportToPublicMusicFolder(context: Context, sourceFile: File, targetFileName: String = sourceFile.name): File? {
+        if (!sourceFile.exists()) return null
+
+        try {
+            val exportDir = File(PUBLIC_EXPORT_PATH)
+            if (!exportDir.exists()) {
+                exportDir.mkdirs()
+            }
+
+            val destFile = File(exportDir, targetFileName)
+            sourceFile.inputStream().use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            // Register in MediaStore for immediate discovery by media players and file managers
+            val mimeType = when {
+                targetFileName.endsWith(".m4a") -> "audio/mp4"
+                targetFileName.endsWith(".opus") || targetFileName.endsWith(".ogg") -> "audio/ogg"
+                targetFileName.endsWith(".wav") -> "audio/wav"
+                else -> "audio/mp4"
+            }
+
+            val values = ContentValues().apply {
+                put(MediaStore.Audio.Media.DISPLAY_NAME, targetFileName)
+                put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/AudioStitch")
+                    put(MediaStore.Audio.Media.IS_PENDING, 0)
+                } else {
+                    put(MediaStore.Audio.Media.DATA, destFile.absolutePath)
+                }
+            }
+
+            try {
+                context.contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+            } catch (e: Exception) {
+                Log.w(TAG, "MediaStore insertion notice: ${e.message}")
+            }
+
+            Log.i(TAG, "File successfully exported to ${destFile.absolutePath}")
+            return destFile
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to export file to $PUBLIC_EXPORT_PATH", e)
+            return null
         }
     }
 
