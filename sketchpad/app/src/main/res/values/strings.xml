@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sketchpad</string>
+    <string name="brush_size">Brush size</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="eraser">Eraser</string>
+    <string name="clear">Clear</string>
+    <string name="save">Save</string>
+    <string name="colour_swatch">Colour</string>
+    <string name="drawing_canvas">Drawing canvas</string>
+    <string name="clear_title">Clear the drawing?</string>
+    <string name="clear_message">This erases everything on the canvas. It cannot be undone.</string>
+    <string name="cancel">Cancel</string>
+    <string name="saved_to_gallery">Saved to your Pictures/Sketchpad folder</string>
+    <string name="save_failed">Could not save the drawing</string>
+    <string name="save_needs_permission">Storage permission is needed to save the drawing</string>
+    <string name="nothing_to_save">Draw something first</string>
+</resources>

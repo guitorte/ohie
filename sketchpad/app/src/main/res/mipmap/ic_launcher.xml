@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Legacy launcher icon for API 24-25; API 26+ uses the adaptive icon. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launcher_background" />
+    <item
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:bottom="12dp" android:top="12dp"
+        android:left="12dp" android:right="12dp" />
+</layer-list>

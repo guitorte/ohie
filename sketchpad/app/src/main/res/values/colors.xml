@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink_black">#FF101014</color>
+    <color name="ink_red">#FFE53935</color>
+    <color name="ink_orange">#FFFB8C00</color>
+    <color name="ink_yellow">#FFFDD835</color>
+    <color name="ink_green">#FF43A047</color>
+    <color name="ink_teal">#FF00ACC1</color>
+    <color name="ink_blue">#FF1E88E5</color>
+    <color name="ink_purple">#FF8E24AA</color>
+    <color name="ink_brown">#FF6D4C41</color>
+    <color name="ink_white">#FFFFFFFF</color>
+
+    <color name="canvas_paper">#FFFFFFFF</color>
+    <color name="launcher_background">#FF1E88E5</color>
+</resources>
