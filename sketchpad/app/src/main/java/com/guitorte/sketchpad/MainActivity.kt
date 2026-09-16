@@ -4,15 +4,21 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -20,6 +26,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.exifinterface.media.ExifInterface
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.guitorte.sketchpad.databinding.ActivityMainBinding
 import java.io.File
@@ -27,17 +34,25 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val swatchViews = mutableListOf<View>()
 
+    private val ioExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     private val palette = intArrayOf(
         R.color.ink_black, R.color.ink_red, R.color.ink_orange, R.color.ink_yellow,
         R.color.ink_green, R.color.ink_teal, R.color.ink_blue, R.color.ink_purple,
         R.color.ink_brown, R.color.ink_white
     )
+
+    private val pickPhoto = registerForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) loadPhoto(uri) }
 
     private val requestLegacyStorage = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -54,14 +69,23 @@ class MainActivity : AppCompatActivity() {
         buildPalette()
 
         binding.sizeSlider.addOnChangeListener { _, value, _ ->
-            binding.drawingView.strokeWidth = value
+            binding.drawingView.brushWidth = value
         }
-        binding.drawingView.strokeWidth = binding.sizeSlider.value
+        binding.drawingView.brushWidth = binding.sizeSlider.value
 
         binding.eraserButton.addOnCheckedChangeListener { _, checked ->
             binding.drawingView.eraserEnabled = checked
         }
 
+        // The pan toggle only swaps what one finger does; the drawing tools keep
+        // their state, so switching back resumes the brush or eraser as it was.
+        binding.panButton.addOnCheckedChangeListener { _, checked -> setPanMode(checked) }
+
+        binding.photoButton.setOnClickListener {
+            pickPhoto.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
         binding.undoButton.setOnClickListener { binding.drawingView.undo() }
         binding.redoButton.setOnClickListener { binding.drawingView.redo() }
         binding.clearButton.setOnClickListener { confirmClear() }
@@ -71,6 +95,12 @@ class MainActivity : AppCompatActivity() {
         refreshHistoryButtons()
 
         selectColor(0)
+        setPanMode(binding.panButton.isChecked)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ioExecutor.shutdownNow()
     }
 
     /**
@@ -92,6 +122,8 @@ class MainActivity : AppCompatActivity() {
             insets
         }
     }
+
+    // region drawing tools
 
     private fun buildPalette() {
         val size = dp(40)
@@ -145,6 +177,27 @@ class MainActivity : AppCompatActivity() {
         return luminance > 160
     }
 
+    /**
+     * Greys out the drawing tools while one finger pans, so the active mode is
+     * obvious at a glance. Their state is left untouched, which is what lets
+     * switching back pick up exactly where drawing left off.
+     */
+    private fun setPanMode(panning: Boolean) {
+        binding.drawingView.mode =
+            if (panning) DrawingView.Mode.NAVIGATE else DrawingView.Mode.DRAW
+
+        val alpha = if (panning) 0.38f else 1f
+        binding.colorRow.alpha = alpha
+        binding.sizeSlider.alpha = alpha
+        binding.eraserButton.alpha = alpha
+
+        swatchViews.forEach { it.isEnabled = !panning }
+        binding.sizeSlider.isEnabled = !panning
+        binding.eraserButton.isEnabled = !panning
+
+        binding.modeHint.setText(if (panning) R.string.mode_pan else R.string.mode_draw)
+    }
+
     private fun refreshHistoryButtons() {
         binding.undoButton.isEnabled = binding.drawingView.canUndo
         binding.redoButton.isEnabled = binding.drawingView.canRedo
@@ -160,8 +213,95 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // endregion
+
+    // region photo
+
+    private fun loadPhoto(uri: Uri) {
+        toast(R.string.loading_photo)
+        ioExecutor.execute {
+            val bitmap = runCatching { decodeScaled(uri) }.getOrNull()
+            mainHandler.post {
+                if (isFinishing || isDestroyed) {
+                    bitmap?.recycle()
+                    return@post
+                }
+                if (bitmap == null) {
+                    toast(R.string.photo_failed)
+                } else {
+                    binding.drawingView.setPhoto(bitmap)
+                }
+            }
+        }
+    }
+
+    /**
+     * Decodes at most [MAX_PHOTO_PX] on the long edge. Full-resolution phone photos
+     * would otherwise be tens of megabytes on the heap for no visible gain, and one
+     * world unit is one photo pixel, so this also caps the exported size.
+     */
+    private fun decodeScaled(uri: Uri): Bitmap? {
+        val probe = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, probe) }
+        if (probe.outWidth <= 0 || probe.outHeight <= 0) return null
+
+        var sample = 1
+        while (probe.outWidth / sample > MAX_PHOTO_PX || probe.outHeight / sample > MAX_PHOTO_PX) {
+            sample *= 2
+        }
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        val decoded = contentResolver.openInputStream(uri)
+            ?.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: return null
+
+        return applyExifOrientation(uri, decoded)
+    }
+
+    /** Cameras record orientation in EXIF rather than rotating the pixels. */
+    private fun applyExifOrientation(uri: Uri, bitmap: Bitmap): Bitmap {
+        val orientation = runCatching {
+            contentResolver.openInputStream(uri)?.use {
+                ExifInterface(it).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.postScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.postScale(-1f, 1f)
+            }
+            else -> return bitmap
+        }
+
+        return runCatching {
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                .also { if (it != bitmap) bitmap.recycle() }
+        }.getOrDefault(bitmap)
+    }
+
+    // endregion
+
+    // region saving
+
     private fun onSaveRequested() {
-        if (!binding.drawingView.canUndo) {
+        if (!binding.drawingView.canUndo && !binding.drawingView.hasPhoto) {
             toast(R.string.nothing_to_save)
             return
         }
@@ -178,7 +318,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveDrawing() {
-        val bitmap = binding.drawingView.exportBitmap()
+        val bitmap = runCatching { binding.drawingView.exportBitmap() }.getOrNull()
         if (bitmap == null) {
             toast(R.string.save_failed)
             return
@@ -247,8 +387,14 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
+    // endregion
+
     private fun toast(messageRes: Int) =
         Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val MAX_PHOTO_PX = 3072
+    }
 }

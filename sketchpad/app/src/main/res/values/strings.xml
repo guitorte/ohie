@@ -15,5 +15,11 @@
     <string name="saved_to_gallery">Saved to your Pictures/Sketchpad folder</string>
     <string name="save_failed">Could not save the drawing</string>
     <string name="save_needs_permission">Storage permission is needed to save the drawing</string>
-    <string name="nothing_to_save">Draw something first</string>
+    <string name="nothing_to_save">Load a photo or draw something first</string>
+    <string name="load_photo">Load photo</string>
+    <string name="pan_zoom">Pan / zoom</string>
+    <string name="mode_draw">Drawing — one finger draws</string>
+    <string name="mode_pan">Pan &amp; zoom — drag, pinch, double-tap to fit</string>
+    <string name="loading_photo">Loading photo…</string>
+    <string name="photo_failed">Could not open that image</string>
 </resources>

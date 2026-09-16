@@ -12,5 +12,6 @@
     <color name="ink_white">#FFFFFFFF</color>
 
     <color name="canvas_paper">#FFFFFFFF</color>
+    <color name="canvas_surface">#FFEDEDF2</color>
     <color name="launcher_background">#FF1E88E5</color>
 </resources>
