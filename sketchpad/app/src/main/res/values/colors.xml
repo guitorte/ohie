@@ -12,5 +12,14 @@
     <color name="ink_white">#FFFFFFFF</color>
 
     <color name="canvas_paper">#FFFFFFFF</color>
+    <color name="canvas_surface">#FFEDEDF2</color>
     <color name="launcher_background">#FF1E88E5</color>
+
+    <!-- Backdrop presets for the endless canvas. -->
+    <color name="bg_mist">#FFEDEDF2</color>
+    <color name="bg_white">#FFFFFFFF</color>
+    <color name="bg_paper">#FFF6ECD8</color>
+    <color name="bg_slate">#FF8E95A3</color>
+    <color name="bg_charcoal">#FF2B2D33</color>
+    <color name="bg_black">#FF000000</color>
 </resources>
