@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -38,7 +39,7 @@ class DrawingView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     /** What a one-finger gesture does. */
-    enum class Mode { DRAW, NAVIGATE, PICK }
+    enum class Mode { DRAW, NAVIGATE, PICK, LASER }
 
     private class Stroke(val path: Path, val color: Int, val width: Float, val eraser: Boolean)
 
@@ -80,6 +81,16 @@ class DrawingView @JvmOverloads constructor(
     private var pickPending = false
     private var pickDownX = 0f
     private var pickDownY = 0f
+
+    /** Laser trail samples, oldest first, in world coordinates. */
+    private class Spark(val x: Float, val y: Float, val at: Long)
+
+    private val trail = ArrayDeque<Spark>()
+    private val laserPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
     private val tapSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
     /** Whether a one-finger drag draws or pans. Two fingers always pan and zoom. */
@@ -89,6 +100,7 @@ class DrawingView @JvmOverloads constructor(
             // Switching away mid-gesture would leave a half-finished path behind.
             cancelStroke()
             pickPending = false
+            trail.clear()
             field = value
             invalidate()
         }
@@ -160,6 +172,64 @@ class DrawingView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawScene(canvas, withGrid = true)
+        // Painted after the scene and never into it: the trail is not part of the
+        // drawing, so it stays out of exports, undo history and colour sampling.
+        drawTrail(canvas)
+    }
+
+    /**
+     * The laser trail: a comet of recent touch samples, each segment fading with
+     * its own age, so the tail rubs itself out a fixed time behind the finger.
+     */
+    private fun drawTrail(canvas: Canvas) {
+        val now = SystemClock.uptimeMillis()
+        while (trail.isNotEmpty() && now - trail.first().at > TRAIL_LIFETIME_MS) {
+            trail.removeFirst()
+        }
+        if (trail.size < 2) {
+            if (trail.isNotEmpty()) postInvalidateOnAnimation()
+            return
+        }
+
+        val scale = currentScale()
+        val core = (brushWidth / scale).coerceAtLeast(MIN_WORLD_WIDTH)
+        val halo = core * HALO_RATIO
+
+        canvas.save()
+        canvas.concat(viewMatrix)
+
+        // Halo first, then the bright core over it, or each segment's halo would
+        // wash out the core of the segment before it.
+        for (pass in 0..1) {
+            laserPaint.strokeWidth = if (pass == 0) halo else core
+            val baseColor = if (pass == 0) strokeColor else lighten(strokeColor)
+            val maxAlpha = if (pass == 0) HALO_ALPHA else 255
+
+            for (i in 1 until trail.size) {
+                val from = trail[i - 1]
+                val to = trail[i]
+                val life = 1f - (now - to.at).toFloat() / TRAIL_LIFETIME_MS
+                if (life <= 0f) continue
+                laserPaint.color = baseColor
+                laserPaint.alpha = (maxAlpha * life).toInt().coerceIn(0, 255)
+                canvas.drawLine(from.x, from.y, to.x, to.y, laserPaint)
+            }
+        }
+
+        canvas.restore()
+        postInvalidateOnAnimation()
+    }
+
+    /** Pushes a colour toward white, so the core of the beam reads as glowing. */
+    private fun lighten(color: Int): Int = Color.rgb(
+        Color.red(color) + ((255 - Color.red(color)) * CORE_LIFT).toInt(),
+        Color.green(color) + ((255 - Color.green(color)) * CORE_LIFT).toInt(),
+        Color.blue(color) + ((255 - Color.blue(color)) * CORE_LIFT).toInt()
+    )
+
+    private fun addSpark(screenX: Float, screenY: Float) {
+        val world = toWorld(screenX, screenY)
+        trail.addLast(Spark(world[0], world[1], SystemClock.uptimeMillis()))
     }
 
     /** Everything visible, at the current view transform. */
@@ -212,6 +282,10 @@ class DrawingView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(true)
                 when (mode) {
                     Mode.DRAW -> startStroke(event.x, event.y)
+                    Mode.LASER -> {
+                        trail.clear()
+                        addSpark(event.x, event.y)
+                    }
                     Mode.PICK -> {
                         pickPending = true
                         pickDownX = event.x
@@ -236,6 +310,8 @@ class DrawingView @JvmOverloads constructor(
                 }
                 if (drawing) {
                     extendStroke(event.x, event.y)
+                } else if (mode == Mode.LASER && !panning) {
+                    addSpark(event.x, event.y)
                 } else if (panning) {
                     val fx = focusOf(event, SKIP_NONE, horizontal = true)
                     val fy = focusOf(event, SKIP_NONE, horizontal = false)
@@ -253,6 +329,9 @@ class DrawingView @JvmOverloads constructor(
                 if (drawing) {
                     finishStroke(event.x, event.y)
                     performClick()
+                } else if (mode == Mode.LASER && !panning) {
+                    // No commit: the trail simply keeps ageing out on its own.
+                    addSpark(event.x, event.y)
                 } else if (pickPending && withinTapSlop(event.x, event.y)) {
                     onColorPicked?.invoke(colorAt(event.x, event.y))
                     performClick()
@@ -521,5 +600,9 @@ class DrawingView @JvmOverloads constructor(
         const val MAX_GRID_PX = 224f
         const val GRID_GUARD = 16
         const val SKIP_NONE = -1
+        const val TRAIL_LIFETIME_MS = 900L
+        const val HALO_RATIO = 2.4f
+        const val HALO_ALPHA = 110
+        const val CORE_LIFT = 0.55f
     }
 }

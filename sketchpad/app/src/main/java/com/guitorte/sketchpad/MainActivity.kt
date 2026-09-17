@@ -101,8 +101,20 @@ class MainActivity : AppCompatActivity() {
         }
         binding.drawingView.brushWidth = binding.sizeSlider.value
 
+        // Eraser and laser are both "what the pen does", so they are exclusive:
+        // turning one on releases the other rather than disabling its button.
         binding.eraserButton.addOnCheckedChangeListener { _, checked ->
             binding.drawingView.eraserEnabled = checked
+            if (checked) binding.laserButton.isChecked = false
+            applyMode()
+        }
+
+        binding.laserButton.addOnCheckedChangeListener { _, checked ->
+            if (checked) {
+                binding.eraserButton.isChecked = false
+                toast(R.string.laser_hint)
+            }
+            applyMode()
         }
 
         // The pan toggle only swaps what one finger does; the drawing tools keep
@@ -271,6 +283,7 @@ class MainActivity : AppCompatActivity() {
         binding.drawingView.mode = when {
             picking -> DrawingView.Mode.PICK
             panning -> DrawingView.Mode.NAVIGATE
+            binding.laserButton.isChecked -> DrawingView.Mode.LASER
             else -> DrawingView.Mode.DRAW
         }
 
@@ -287,6 +300,8 @@ class MainActivity : AppCompatActivity() {
         binding.sizeSlider.isEnabled = !drawingDisabled
         binding.eraserButton.alpha = alpha
         binding.eraserButton.isEnabled = !drawingDisabled
+        binding.laserButton.alpha = alpha
+        binding.laserButton.isEnabled = !drawingDisabled
     }
 
     /** Retracts the colours and brush size, leaving the action bar in place. */

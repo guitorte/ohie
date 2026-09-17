@@ -87,6 +87,15 @@
                 app:icon="@drawable/ic_eraser" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/laserButton"
+                style="@style/Widget.Sketchpad.IconButton.Toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checkable="true"
+                android:contentDescription="@string/laser"
+                app:icon="@drawable/ic_laser" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/panButton"
                 style="@style/Widget.Sketchpad.IconButton.Toggle"
                 android:layout_width="wrap_content"
