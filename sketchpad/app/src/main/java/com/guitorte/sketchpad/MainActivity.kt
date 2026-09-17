@@ -2,7 +2,10 @@ package com.guitorte.sketchpad
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -15,12 +18,17 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.transition.TransitionManager
+import android.view.Gravity
 import android.view.View
+import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -40,9 +48,22 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val swatchViews = mutableListOf<View>()
+    private lateinit var eyedropperView: ImageView
+    private lateinit var prefs: SharedPreferences
+
+    /** Where a colour sampled from the canvas should land. */
+    private enum class PickTarget { INK, BACKGROUND }
+
+    private var pickTarget = PickTarget.INK
+    private var picking = false
 
     private val ioExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val backgrounds = intArrayOf(
+        R.color.bg_mist, R.color.bg_white, R.color.bg_paper,
+        R.color.bg_slate, R.color.bg_charcoal, R.color.bg_black
+    )
 
     private val palette = intArrayOf(
         R.color.ink_black, R.color.ink_red, R.color.ink_orange, R.color.ink_yellow,
@@ -65,8 +86,15 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
         applyWindowInsets()
         buildPalette()
+
+        binding.drawingView.canvasColor = prefs.getInt(
+            KEY_BACKGROUND,
+            ContextCompat.getColor(this, R.color.bg_mist)
+        )
 
         binding.sizeSlider.addOnChangeListener { _, value, _ ->
             binding.drawingView.brushWidth = value
@@ -79,7 +107,11 @@ class MainActivity : AppCompatActivity() {
 
         // The pan toggle only swaps what one finger does; the drawing tools keep
         // their state, so switching back resumes the brush or eraser as it was.
-        binding.panButton.addOnCheckedChangeListener { _, checked -> setPanMode(checked) }
+        binding.panButton.addOnCheckedChangeListener { _, _ -> applyMode() }
+
+        binding.paletteButton.addOnCheckedChangeListener { _, checked -> setToolsVisible(checked) }
+
+        binding.drawingView.onColorPicked = ::onColorPicked
 
         binding.photoButton.setOnClickListener {
             pickPhoto.launch(
@@ -88,14 +120,14 @@ class MainActivity : AppCompatActivity() {
         }
         binding.undoButton.setOnClickListener { binding.drawingView.undo() }
         binding.redoButton.setOnClickListener { binding.drawingView.redo() }
-        binding.clearButton.setOnClickListener { confirmClear() }
-        binding.saveButton.setOnClickListener { onSaveRequested() }
+        binding.moreButton.setOnClickListener { showMoreMenu() }
 
         binding.drawingView.onHistoryChanged = ::refreshHistoryButtons
         refreshHistoryButtons()
 
         selectColor(0)
-        setPanMode(binding.panButton.isChecked)
+        setToolsVisible(binding.paletteButton.isChecked)
+        applyMode()
     }
 
     override fun onDestroy() {
@@ -129,6 +161,21 @@ class MainActivity : AppCompatActivity() {
         val size = dp(40)
         val margin = dp(4)
 
+        // The dropper sits with the colours and doubles as the swatch showing the
+        // current ink, which is the only way to display a colour picked off canvas.
+        eyedropperView = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                setMargins(margin, margin, margin, margin)
+            }
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+            setImageResource(R.drawable.ic_eyedropper)
+            contentDescription = getString(R.string.eyedropper)
+            setOnClickListener {
+                if (picking) cancelPicking() else startPicking(PickTarget.INK)
+            }
+        }
+        binding.colorRow.addView(eyedropperView)
+
         palette.forEachIndexed { index, colorRes ->
             val color = ContextCompat.getColor(this, colorRes)
             val swatch = View(this).apply {
@@ -145,17 +192,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun selectColor(index: Int) {
-        val color = ContextCompat.getColor(this, palette[index])
+    private fun selectColor(index: Int) =
+        applyInkColor(ContextCompat.getColor(this, palette[index]), fromPalette = index)
+
+    /**
+     * @param fromPalette index of the swatch that supplied the colour, or null when
+     *   it came off the canvas — in which case no swatch is ringed and the dropper
+     *   carries the colour instead.
+     */
+    private fun applyInkColor(color: Int, fromPalette: Int?) {
         binding.drawingView.strokeColor = color
 
-        // Picking a colour is an implicit request to stop erasing.
+        // Choosing a colour is an implicit request to stop erasing.
         if (binding.eraserButton.isChecked) binding.eraserButton.isChecked = false
 
         swatchViews.forEachIndexed { i, view ->
             val swatchColor = ContextCompat.getColor(this, palette[i])
-            view.background = swatchDrawable(swatchColor, selected = i == index)
+            view.background = swatchDrawable(swatchColor, selected = i == fromPalette)
         }
+        eyedropperView.background = swatchDrawable(color, selected = fromPalette == null)
+        eyedropperView.imageTintList = ColorStateList.valueOf(
+            if (isLight(color)) Color.BLACK else Color.WHITE
+        )
+    }
+
+    private fun startPicking(target: PickTarget) {
+        pickTarget = target
+        picking = true
+        applyMode()
+        toast(R.string.eyedropper_hint)
+    }
+
+    private fun cancelPicking() {
+        picking = false
+        applyMode()
+    }
+
+    private fun onColorPicked(color: Int) {
+        picking = false
+        applyMode()
+        when (pickTarget) {
+            PickTarget.INK -> applyInkColor(color, fromPalette = null)
+            PickTarget.BACKGROUND -> applyBackground(color)
+        }
+    }
+
+    private fun applyBackground(color: Int) {
+        binding.drawingView.canvasColor = color
+        prefs.edit().putInt(KEY_BACKGROUND, color).apply()
     }
 
     private fun swatchDrawable(color: Int, selected: Boolean): GradientDrawable =
@@ -178,30 +262,121 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Greys out the drawing tools while one finger pans, so the active mode is
-     * obvious at a glance. Their state is left untouched, which is what lets
-     * switching back pick up exactly where drawing left off.
+     * Derives what one finger does from the two things that can claim it. Nothing
+     * here touches the drawing tools' own state, which is what lets a trip through
+     * pan or pick mode return to exactly the brush or eraser that was in use.
      */
-    private fun setPanMode(panning: Boolean) {
-        binding.drawingView.mode =
-            if (panning) DrawingView.Mode.NAVIGATE else DrawingView.Mode.DRAW
+    private fun applyMode() {
+        val panning = binding.panButton.isChecked
+        binding.drawingView.mode = when {
+            picking -> DrawingView.Mode.PICK
+            panning -> DrawingView.Mode.NAVIGATE
+            else -> DrawingView.Mode.DRAW
+        }
 
-        val alpha = if (panning) 0.38f else 1f
-        binding.colorRow.alpha = alpha
+        val drawingDisabled = panning || picking
+        val alpha = if (drawingDisabled) 0.38f else 1f
+
+        // Dimmed per swatch rather than on the whole row: the dropper stays live
+        // even while panning, and must not look disabled when it is not.
+        swatchViews.forEach {
+            it.isEnabled = !drawingDisabled
+            it.alpha = alpha
+        }
         binding.sizeSlider.alpha = alpha
+        binding.sizeSlider.isEnabled = !drawingDisabled
         binding.eraserButton.alpha = alpha
+        binding.eraserButton.isEnabled = !drawingDisabled
+    }
 
-        swatchViews.forEach { it.isEnabled = !panning }
-        binding.sizeSlider.isEnabled = !panning
-        binding.eraserButton.isEnabled = !panning
+    /** Retracts the colours and brush size, leaving the action bar in place. */
+    private fun setToolsVisible(visible: Boolean) {
+        TransitionManager.beginDelayedTransition(binding.toolbar)
+        binding.toolPanel.visibility = if (visible) View.VISIBLE else View.GONE
+    }
 
-        binding.modeHint.setText(if (panning) R.string.mode_pan else R.string.mode_draw)
+    private fun showMoreMenu() {
+        val menu = PopupMenu(this, binding.moreButton, Gravity.END)
+        menu.menu.add(0, MENU_BACKGROUND, 0, R.string.background_colour)
+        menu.menu.add(0, MENU_SAVE, 1, R.string.save)
+        menu.menu.add(0, MENU_CLEAR, 2, R.string.clear).isEnabled =
+            binding.drawingView.canUndo || binding.drawingView.canRedo
+
+        menu.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_BACKGROUND -> showBackgroundDialog()
+                MENU_SAVE -> onSaveRequested()
+                MENU_CLEAR -> confirmClear()
+            }
+            true
+        }
+        menu.show()
+    }
+
+    /** Preset backdrops plus a dropper, for sampling one straight off the photo. */
+    private fun showBackgroundDialog() {
+        val current = binding.drawingView.canvasColor
+        val size = dp(48)
+        val margin = dp(6)
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(16), dp(16), dp(8))
+        }
+
+        val scroller = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row)
+        }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.background_colour)
+            .setView(scroller)
+            .setNegativeButton(R.string.cancel, null)
+            .create()
+
+        backgrounds.forEach { colorRes ->
+            val color = ContextCompat.getColor(this, colorRes)
+            row.addView(
+                View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                        setMargins(margin, margin, margin, margin)
+                    }
+                    background = swatchDrawable(color, selected = color == current)
+                    setOnClickListener {
+                        applyBackground(color)
+                        dialog.dismiss()
+                    }
+                }
+            )
+        }
+
+        row.addView(
+            ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                    setMargins(margin, margin, margin, margin)
+                }
+                setPadding(dp(11), dp(11), dp(11), dp(11))
+                setImageResource(R.drawable.ic_eyedropper)
+                contentDescription = getString(R.string.pick_from_canvas)
+                background = swatchDrawable(current, selected = false)
+                imageTintList = ColorStateList.valueOf(
+                    if (isLight(current)) Color.BLACK else Color.WHITE
+                )
+                setOnClickListener {
+                    dialog.dismiss()
+                    startPicking(PickTarget.BACKGROUND)
+                }
+            }
+        )
+
+        dialog.show()
     }
 
     private fun refreshHistoryButtons() {
         binding.undoButton.isEnabled = binding.drawingView.canUndo
         binding.redoButton.isEnabled = binding.drawingView.canRedo
-        binding.clearButton.isEnabled = binding.drawingView.canUndo || binding.drawingView.canRedo
     }
 
     private fun confirmClear() {
@@ -396,5 +571,10 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val MAX_PHOTO_PX = 3072
+        const val PREFS = "sketchpad"
+        const val KEY_BACKGROUND = "background_color"
+        const val MENU_BACKGROUND = 1
+        const val MENU_SAVE = 2
+        const val MENU_CLEAR = 3
     }
 }

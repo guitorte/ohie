@@ -14,8 +14,10 @@ import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.ViewConfiguration
 import android.view.View
 import androidx.core.content.ContextCompat
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -36,7 +38,7 @@ class DrawingView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     /** What a one-finger gesture does. */
-    enum class Mode { DRAW, NAVIGATE }
+    enum class Mode { DRAW, NAVIGATE, PICK }
 
     private class Stroke(val path: Path, val color: Int, val width: Float, val eraser: Boolean)
 
@@ -75,12 +77,18 @@ class DrawingView @JvmOverloads constructor(
     private var lastFocusX = 0f
     private var lastFocusY = 0f
 
+    private var pickPending = false
+    private var pickDownX = 0f
+    private var pickDownY = 0f
+    private val tapSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+
     /** Whether a one-finger drag draws or pans. Two fingers always pan and zoom. */
     var mode: Mode = Mode.DRAW
         set(value) {
             if (field == value) return
-            // Switching away mid-stroke would leave a half-finished path behind.
+            // Switching away mid-gesture would leave a half-finished path behind.
             cancelStroke()
+            pickPending = false
             field = value
             invalidate()
         }
@@ -92,13 +100,26 @@ class DrawingView @JvmOverloads constructor(
 
     var eraserEnabled: Boolean = false
 
-    /** The endless backdrop the photo floats on. */
-    var surfaceColor: Int = ContextCompat.getColor(context, R.color.canvas_surface)
-
-    /** Background of exported images, seen only where the photo does not reach. */
-    var paperColor: Int = ContextCompat.getColor(context, R.color.canvas_paper)
+    /**
+     * The endless backdrop the photo floats on, and the background of exported
+     * images — one colour, so a save looks like what is on screen.
+     */
+    var canvasColor: Int = ContextCompat.getColor(context, R.color.canvas_surface)
+        set(value) {
+            field = value
+            // A dark backdrop needs light grid lines, or they vanish.
+            gridPaint.color = if (isDark(value)) {
+                Color.argb(30, 255, 255, 255)
+            } else {
+                Color.argb(22, 0, 0, 0)
+            }
+            invalidate()
+        }
 
     var onHistoryChanged: (() -> Unit)? = null
+
+    /** Fired with the colour under the finger after a tap in [Mode.PICK]. */
+    var onColorPicked: ((Int) -> Unit)? = null
 
     val canUndo: Boolean get() = strokes.isNotEmpty()
     val canRedo: Boolean get() = undone.isNotEmpty()
@@ -138,13 +159,18 @@ class DrawingView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(surfaceColor)
+        drawScene(canvas, withGrid = true)
+    }
+
+    /** Everything visible, at the current view transform. */
+    private fun drawScene(canvas: Canvas, withGrid: Boolean) {
+        canvas.drawColor(canvasColor)
 
         val scale = currentScale()
 
         canvas.save()
         canvas.concat(viewMatrix)
-        drawGrid(canvas, scale)
+        if (withGrid) drawGrid(canvas, scale)
         photo?.let {
             canvas.drawBitmap(it, 0f, 0f, photoPaint)
             photoEdgePaint.strokeWidth = 1f / scale
@@ -162,6 +188,21 @@ class DrawingView @JvmOverloads constructor(
         canvas.restoreToCount(layer)
     }
 
+    /**
+     * The colour showing at a point on screen — photo, ink or backdrop, whatever is
+     * actually on top there. Rendering the scene into a single pixel is exact by
+     * construction: it is the same drawing code the display uses.
+     */
+    private fun colorAt(screenX: Float, screenY: Float): Int {
+        val probe = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(probe)
+        canvas.translate(-screenX, -screenY)
+        drawScene(canvas, withGrid = false)
+        val color = probe.getPixel(0, 0)
+        probe.recycle()
+        return color
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(event)
         if (mode == Mode.NAVIGATE) tapDetector.onTouchEvent(event)
@@ -169,16 +210,30 @@ class DrawingView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
-                if (mode == Mode.DRAW) startStroke(event.x, event.y) else beginPan(event, SKIP_NONE)
+                when (mode) {
+                    Mode.DRAW -> startStroke(event.x, event.y)
+                    Mode.PICK -> {
+                        pickPending = true
+                        pickDownX = event.x
+                        pickDownY = event.y
+                    }
+                    Mode.NAVIGATE -> beginPan(event, SKIP_NONE)
+                }
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 // A second finger always means "move the canvas", even mid-stroke.
                 cancelStroke()
+                pickPending = false
                 beginPan(event, SKIP_NONE)
             }
 
             MotionEvent.ACTION_MOVE -> {
+                if (pickPending && !withinTapSlop(event.x, event.y)) {
+                    // A drag is not a tap; let it pan instead of sampling.
+                    pickPending = false
+                    beginPan(event, SKIP_NONE)
+                }
                 if (drawing) {
                     extendStroke(event.x, event.y)
                 } else if (panning) {
@@ -198,12 +253,17 @@ class DrawingView @JvmOverloads constructor(
                 if (drawing) {
                     finishStroke(event.x, event.y)
                     performClick()
+                } else if (pickPending && withinTapSlop(event.x, event.y)) {
+                    onColorPicked?.invoke(colorAt(event.x, event.y))
+                    performClick()
                 }
+                pickPending = false
                 panning = false
             }
 
             MotionEvent.ACTION_CANCEL -> {
                 cancelStroke()
+                pickPending = false
                 panning = false
             }
 
@@ -287,7 +347,7 @@ class DrawingView @JvmOverloads constructor(
 
         val out = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        canvas.drawColor(paperColor)
+        canvas.drawColor(canvasColor)
         canvas.scale(scale, scale)
         canvas.translate(-bounds.left, -bounds.top)
         photo?.let { canvas.drawBitmap(it, 0f, 0f, photoPaint) }
@@ -343,6 +403,16 @@ class DrawingView @JvmOverloads constructor(
         activePath = null
         drawing = false
         invalidate()
+    }
+
+    private fun withinTapSlop(x: Float, y: Float): Boolean =
+        abs(x - pickDownX) <= tapSlop && abs(y - pickDownY) <= tapSlop
+
+    private fun isDark(color: Int): Boolean {
+        val luminance = 0.299 * Color.red(color) +
+            0.587 * Color.green(color) +
+            0.114 * Color.blue(color)
+        return luminance < 128
     }
 
     private fun beginPan(event: MotionEvent, skipIndex: Int) {

@@ -4,4 +4,24 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- Icon buttons packed tighter than the Material default, so a full row of
+         them still leaves room for the gap that pushes undo/redo to the edge. -->
+    <style name="Widget.Sketchpad.IconButton" parent="Widget.Material3.Button.IconButton">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetLeft">0dp</item>
+        <item name="android:insetRight">0dp</item>
+        <item name="android:paddingLeft">10dp</item>
+        <item name="android:paddingRight">10dp</item>
+        <item name="iconPadding">0dp</item>
+    </style>
+
+    <style name="Widget.Sketchpad.IconButton.Toggle" parent="Widget.Material3.Button.IconButton.Outlined">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetLeft">0dp</item>
+        <item name="android:insetRight">0dp</item>
+        <item name="android:paddingLeft">10dp</item>
+        <item name="android:paddingRight">10dp</item>
+        <item name="iconPadding">0dp</item>
+    </style>
 </resources>

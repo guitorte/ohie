@@ -12,15 +12,33 @@ configuration, or dependencies with anything else here.
 - Load a photo from the device and draw on it, at any zoom
 - Infinite canvas: the photo sits in open space, so you can annotate in the
   margins as well as on the image
-- A visible **Pan / zoom** switch. On, one finger drags the canvas and a
-  double-tap re-frames the photo. Off, you are back in whichever drawing mode
-  was active before — brush or eraser, same colour, same size
+- A **Pan / zoom** toggle, always visible in the action bar. On, one finger
+  drags the canvas and a double-tap re-frames the photo. Off, you are back in
+  whichever drawing mode was active before — brush or eraser, same colour, same
+  size
+- An eyedropper that samples any colour on the canvas — photo, ink or backdrop —
+  for the brush, or for the background
+- A choice of backdrop colour for the endless canvas, remembered between runs
+- Colours and brush size retract behind the palette button when you want the
+  canvas back; the action bar stays put, with undo and redo at the right edge
 - Two fingers pan and pinch-zoom at any time, drawing mode included
 - Finger drawing smoothed so strokes don't look jagged
 - Ten-colour palette and a brush-size slider (2–60 px)
 - Eraser that removes ink without touching the photo underneath
 - Undo / redo, and clear (which keeps the photo)
 - Save as a PNG into `Pictures/Sketchpad` in the gallery
+
+### The toolbar
+
+`photo · palette · eraser · pan/zoom` sit on the left of the action bar, `undo ·
+redo · more` on the right, within reach of a right thumb. The overflow menu
+holds background colour, save and clear. The palette button retracts the colour
+swatches and the brush slider; the eraser, pan and palette buttons are toggles
+and fill in when active.
+
+Sampling a colour renders the scene into a single pixel at the point you tap, so
+what you get is exactly what is on screen there — photo, ink or backdrop — with
+no separate sampling path to fall out of step with the display.
 
 ### How the canvas works
 
