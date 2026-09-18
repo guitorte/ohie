@@ -132,6 +132,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.undoButton.setOnClickListener { binding.drawingView.undo() }
         binding.redoButton.setOnClickListener { binding.drawingView.redo() }
+        binding.clearButton.setOnClickListener { confirmClear() }
         binding.moreButton.setOnClickListener { showMoreMenu() }
 
         binding.drawingView.onHistoryChanged = ::refreshHistoryButtons
@@ -314,14 +315,11 @@ class MainActivity : AppCompatActivity() {
         val menu = PopupMenu(this, binding.moreButton, Gravity.END)
         menu.menu.add(0, MENU_BACKGROUND, 0, R.string.background_colour)
         menu.menu.add(0, MENU_SAVE, 1, R.string.save)
-        menu.menu.add(0, MENU_CLEAR, 2, R.string.clear).isEnabled =
-            binding.drawingView.canUndo || binding.drawingView.canRedo
 
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 MENU_BACKGROUND -> showBackgroundDialog()
                 MENU_SAVE -> onSaveRequested()
-                MENU_CLEAR -> confirmClear()
             }
             true
         }
@@ -392,6 +390,7 @@ class MainActivity : AppCompatActivity() {
     private fun refreshHistoryButtons() {
         binding.undoButton.isEnabled = binding.drawingView.canUndo
         binding.redoButton.isEnabled = binding.drawingView.canRedo
+        binding.clearButton.isEnabled = binding.drawingView.canUndo || binding.drawingView.canRedo
     }
 
     private fun confirmClear() {
@@ -590,6 +589,5 @@ class MainActivity : AppCompatActivity() {
         const val KEY_BACKGROUND = "background_color"
         const val MENU_BACKGROUND = 1
         const val MENU_SAVE = 2
-        const val MENU_CLEAR = 3
     }
 }

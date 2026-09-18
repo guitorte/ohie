@@ -111,6 +111,14 @@
                 android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/clearButton"
+                style="@style/Widget.Sketchpad.IconButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/clear"
+                app:icon="@drawable/ic_clear" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/undoButton"
                 style="@style/Widget.Sketchpad.IconButton"
                 android:layout_width="wrap_content"

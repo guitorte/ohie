@@ -16,8 +16,8 @@ configuration, or dependencies with anything else here.
   drags the canvas and a double-tap re-frames the photo. Off, you are back in
   whichever drawing mode was active before — brush or eraser, same colour, same
   size
-- A **laser pointer**: marks trail behind your finger and rub themselves out a
-  moment later, leaving nothing behind — for pointing things out while recording
+- A **laser pointer**: marks trail behind your finger and rub themselves out
+  about half a second later, leaving nothing behind — for pointing things out while recording
   or presenting, not for marking the photo up
 - An eyedropper that samples any colour on the canvas — photo, ink or backdrop —
   for the brush, or for the background
@@ -34,8 +34,8 @@ configuration, or dependencies with anything else here.
 ### The toolbar
 
 `photo · palette · eraser · laser · pan/zoom` sit on the left of the action bar,
-`undo · redo · more` on the right, within reach of a right thumb. The overflow
-menu holds background colour, save and clear. The palette button retracts the
+`clear · undo · redo · more` on the right, within reach of a right thumb. The
+overflow menu holds background colour and save. The palette button retracts the
 colour swatches and the brush slider; the eraser, laser, pan and palette buttons
 are toggles and fill in when active.
 
