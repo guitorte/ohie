@@ -16,6 +16,9 @@ configuration, or dependencies with anything else here.
   drags the canvas and a double-tap re-frames the photo. Off, you are back in
   whichever drawing mode was active before — brush or eraser, same colour, same
   size
+- A **laser pointer**: marks trail behind your finger and rub themselves out a
+  moment later, leaving nothing behind — for pointing things out while recording
+  or presenting, not for marking the photo up
 - An eyedropper that samples any colour on the canvas — photo, ink or backdrop —
   for the brush, or for the background
 - A choice of backdrop colour for the endless canvas, remembered between runs
@@ -30,11 +33,18 @@ configuration, or dependencies with anything else here.
 
 ### The toolbar
 
-`photo · palette · eraser · pan/zoom` sit on the left of the action bar, `undo ·
-redo · more` on the right, within reach of a right thumb. The overflow menu
-holds background colour, save and clear. The palette button retracts the colour
-swatches and the brush slider; the eraser, pan and palette buttons are toggles
-and fill in when active.
+`photo · palette · eraser · laser · pan/zoom` sit on the left of the action bar,
+`undo · redo · more` on the right, within reach of a right thumb. The overflow
+menu holds background colour, save and clear. The palette button retracts the
+colour swatches and the brush slider; the eraser, laser, pan and palette buttons
+are toggles and fill in when active.
+
+The laser draws nothing into the document — it is painted after the scene, so it
+never reaches an export, the undo history, or the eyedropper. Each sample in the
+trail fades on its own age, which is what makes the tail rub itself out a fixed
+distance behind the finger rather than all at once when you lift. Eraser and
+laser are mutually exclusive: turning one on releases the other. Both take their
+colour and width from the palette and the slider.
 
 Sampling a colour renders the scene into a single pixel at the point you tap, so
 what you get is exactly what is on screen there — photo, ink or backdrop — with

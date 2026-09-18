@@ -26,4 +26,6 @@
     <string name="eyedropper_hint">Tap the canvas to pick a colour</string>
     <string name="background_colour">Background colour</string>
     <string name="pick_from_canvas">Pick from canvas</string>
+    <string name="laser">Laser pointer — marks fade away</string>
+    <string name="laser_hint">Laser pointer: your marks fade away on their own</string>
 </resources>
