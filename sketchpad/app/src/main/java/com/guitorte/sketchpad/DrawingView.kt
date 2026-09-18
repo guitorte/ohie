@@ -600,7 +600,7 @@ class DrawingView @JvmOverloads constructor(
         const val MAX_GRID_PX = 224f
         const val GRID_GUARD = 16
         const val SKIP_NONE = -1
-        const val TRAIL_LIFETIME_MS = 900L
+        const val TRAIL_LIFETIME_MS = 450L
         const val HALO_RATIO = 2.4f
         const val HALO_ALPHA = 110
         const val CORE_LIFT = 0.55f
