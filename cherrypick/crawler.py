@@ -33,6 +33,9 @@ SKIP_EXTENSIONS = {
     ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".csv",
 }
 
+# ids/classes that mark an element as navigation rather than content.
+MENU_NAME = re.compile(r"(^|[-_\s])(menu|menue|nav|navbar|navigation|sidebar|breadcrumbs?)($|[-_\s])", re.I)
+
 # Upper bound on how many links one discovery may list.
 MAX_LISTED = 5000
 
@@ -158,7 +161,10 @@ class Crawler:
                 seen_on.setdefault(link, set()).add(url)
                 if link in found or len(found) >= MAX_LISTED:
                     continue
-                text = clean(a.get_text(" ")) or a.get("title", "") or parts.path or link
+                img = a.find("img")
+                text = (clean(a.get_text(" ")) or a.get("title", "")
+                        or (img and clean(img.get("alt") or img.get("title") or ""))
+                        or parts.path.rsplit("/", 1)[-1] or link)
                 found[link] = Link(link, text[:120], depth + 1, parent=url)
                 queue.append(link)
 
@@ -247,15 +253,81 @@ def html_to_markdown(html: str, base_url: str = "") -> tuple[str, str]:
     title = clean(soup.title.string) if soup.title and soup.title.string else ""
     for tag in soup(NOISE_TAGS):
         tag.decompose()
+    for tag in soup.find_all(attrs={"id": MENU_NAME}) + soup.find_all(class_=MENU_NAME):
+        tag.decompose()
+    for img in soup.find_all("img"):
+        if is_spacer(img):
+            img.decompose()
+    unwrap_layout_tables(soup)
+    drop_link_bars(soup)
     if base_url:  # absolute links keep working once the Markdown leaves the site
         for tag, attr in (("a", "href"), ("img", "src")):
             for el in soup.find_all(tag, **{attr: True}):
                 el[attr] = urljoin(base_url, el[attr])
     body = soup.find("main") or soup.find("article") or soup.body or soup
     md = markdownify(str(body), heading_style="ATX", bullets="-")
+    md = md.replace("\xa0", " ")
     md = re.sub(r"[ \t]+\n", "\n", md)
     md = re.sub(r"\n{3,}", "\n\n", md).strip()
     return title, md
+
+
+def is_spacer(img) -> bool:
+    """Tiny or 'spacer' images used only to push layout around."""
+    if "spacer" in (img.get("src") or "").lower():
+        return True
+    for attr in ("width", "height"):
+        value = str(img.get(attr, "")).rstrip("px")
+        if value.isdigit() and int(value) <= 10:
+            return True
+    return False
+
+
+def unwrap_layout_tables(soup) -> None:
+    """Turn tables used for page layout into plain blocks.
+
+    Older sites position everything with nested tables; converted as-is they
+    become one giant Markdown table with whole paragraphs crammed into cells.
+    A table counts as layout when it holds another table or its cells hold
+    block content (paragraphs, line breaks, lists, headings). Real data
+    tables, with short cells, are left alone.
+    """
+    blocks = ["table", "p", "div", "br", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6"]
+    layout = [t for t in soup.find_all("table")
+              if any(cell.find(blocks) for cell in t.find_all(["td", "th"]))]
+    for table in layout:
+        for cell in table.find_all(["td", "th", "tr"], recursive=True):
+            if cell.find_parent("table") is table:
+                cell.name = "div"
+                cell.attrs = {}
+        for part in table.find_all(["tbody", "thead", "tfoot"]):
+            if part.find_parent("table") is table:
+                part.unwrap()
+        table.name = "div"
+        table.attrs = {}
+
+
+def drop_link_bars(soup) -> None:
+    """Remove navigation bars and text-less tables (decoration, spacers).
+
+    A link bar is a block of 3+ links with nothing else in it but separators
+    ("|", "»", "·"…), e.g. "<< previous | next >> | home | imprint".
+    Lists (ul/ol) are never touched, so link lists that are content survive.
+    """
+    for table in soup.find_all("table"):
+        if not table.decomposed and not clean(table.get_text()):
+            table.decompose()
+    for el in soup.find_all(["div", "p", "td", "span", "font", "center"]):
+        if el.decomposed:
+            continue
+        links = el.find_all("a")
+        if len(links) < 3 or el.find(["ul", "ol", "table", "img"]):
+            continue
+        rest = el.get_text(" ")
+        for a in links:
+            rest = rest.replace(a.get_text(" "), " ", 1)
+        if not re.sub(r"[\s|·•»«<>/\\:,;–—-]+", "", rest):
+            el.decompose()
 
 
 def slugify(url: str) -> str:
