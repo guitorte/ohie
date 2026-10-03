@@ -18,11 +18,21 @@ decide what goes in.
 
 ## How it works
 
-1. **Discover** – give it a start URL. It crawls breadth-first (depth 1–3, same domain
-   by default, optional path prefix, respects `robots.txt`) and lists every page link it
-   finds. Only pages that need to be opened to find *more* links are fetched; the
-   leaves are just listed, so this step is quick.
-2. **Pick** – every link appears as a checkbox, all ticked. Untick what you don't want.
+1. **Discover** – give it a start URL and a **depth**:
+   - depth 1 → the links on the start page;
+   - depth 2 → those, plus the sub-pages linked from *each* of them;
+   - depth 3–4 → one or two levels further.
+
+   Example: starting at an overview page that links to 36 cards, where each card
+   page links to 3 sub-pages, depth 2 lists every card *and* its 3 sub-pages, grouped
+   as a tree. Options: an optional path prefix (e.g. `/lenormand/`), same-domain only,
+   `robots.txt`, a cap on pages opened, and **ignore menu links on sub-pages**, which
+   drops links that repeat across many sibling pages (nav bars, prev/next, footers),
+   so each page keeps only the sub-pages that are really its own. Only pages that
+   must be opened to find *more* links are fetched; the deepest level is just listed.
+2. **Pick** – every link appears as a checkbox, all ticked, with sub-pages indented
+   under the page they came from. With **sub-pages follow their parent** on, unticking
+   a page drops its whole branch in one click (the start page only toggles itself).
    For big lists, use the filter (`blog 2024 -tag` → all terms must match, `-word`
    excludes) together with **Select / Deselect / Invert shown**, or keep only links up to
    a given crawl depth. Selections on hidden rows are preserved while you filter.
@@ -36,7 +46,8 @@ The download is a `.zip` containing:
 ```
 index.md          list of pages (and any that failed, with the reason)
 combined.md       every page in one file, separated by ---
-pages/*.md        one file per page, with title/source front matter
+pages/<page>/*.md one folder per top-level page, holding it and its sub-pages
+                  (each file has title/source front matter)
 ```
 
 ## Run locally
