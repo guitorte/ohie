@@ -290,5 +290,10 @@ with gr.Blocks(title="Cherrypick · Bulk Content Extractor") as demo:
                       [zip_out, status_out, preview_out, cache_state])
 
 
+def launch(**kwargs):
+    """Start the UI; extra kwargs go to Blocks.launch (e.g. share=True)."""
+    demo.launch(css=CSS, theme=gr.themes.Soft(), **kwargs)
+
+
 if __name__ == "__main__":
-    demo.launch(css=CSS, theme=gr.themes.Soft())
+    launch()

@@ -50,6 +50,15 @@ pages/<page>/*.md one folder per top-level page, holding it and its sub-pages
                   (each file has title/source front matter)
 ```
 
+## Run on Google Colab
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/guitorte/ohie/blob/ccr-614e7029-ryf7bw/cherrypick/cherrypick_colab.ipynb)
+
+Open `cherrypick_colab.ipynb` in Colab and run both cells: the first installs the
+dependencies and fetches `app.py` / `crawler.py` from this repo, the second launches the
+app inline (plus a public `gradio.live` link). After merging to `main`, change `BRANCH`
+in the notebook and the badge link above to `main`.
+
 ## Run locally
 
 ```bash
